@@ -245,14 +245,21 @@ namespace net {
             switch (state()) {
             case connection_state::disconnected:
                 break;
-            default:
-                m_ec = ec;
-                m_state = ec == boost::system::error_code(boost::asio::error::eof) ? connection_state::disconnected : connection_state::error;
-                [[fallthrough]];
             case connection_state::error:
+                m_ec = ec;
+                m_state = connection_state::error;
                 m_socket.close();
-                if constexpr (requires (Derived obj) { obj.on_error(ec); }) {
-                    static_cast<Derived &>(*this).on_error(ec);
+                if constexpr (requires (Derived obj) { obj.on_error(); }) {
+                    static_cast<Derived &>(*this).on_error();
+                }
+                break;
+            default:
+                if (ec == boost::system::error_code(boost::asio::error::eof)) {
+                    m_state = connection_state::disconnected;
+                    m_socket.close();
+                    if constexpr (requires (Derived obj) { obj.on_disconnect(); }) {
+                        static_cast<Derived &>(*this).on_disconnect();
+                    }
                 }
                 break;
             }
