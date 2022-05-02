@@ -48,14 +48,19 @@ namespace net {
     };
 
     template<typename Derived, typename MessageTypes>
-    class connection_base : public std::enable_shared_from_this<connection_base<Derived, MessageTypes>> {
+    class connection_base : public std::enable_shared_from_this<Derived> {
     public:
-        using std::enable_shared_from_this<connection_base<Derived, MessageTypes>>::shared_from_this;
+        using std::enable_shared_from_this<Derived>::shared_from_this;
         using pointer = std::shared_ptr<Derived>;
+        using handle = std::weak_ptr<Derived>;
 
         template<typename ... Ts>
         static pointer make(Ts && ... args) {
             return pointer(new Derived(std::forward<Ts>(args) ... ));
+        }
+
+        handle get_handle() {
+            return std::weak_ptr(shared_from_this());
         }
 
     protected:

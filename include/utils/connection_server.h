@@ -2,7 +2,7 @@
 #define __CONNECTION_SERVER_H__
 
 #include <functional>
-#include <map>
+#include <set>
 
 #include "connection.h"
 #include "ansicvt.h"
@@ -14,46 +14,38 @@ struct connection_server_client : connection_base<connection_server_client<Paren
     using base = connection_base<connection_server_client<ParentType, MessageTypes>, MessageTypes>;
     using base::address_string;
     using base::error_message;
+    using base::get_handle;
 
     ParentType &parent;
-    int client_id;
 
-    connection_server_client(ParentType &parent, int client_id, boost::asio::ip::tcp::socket &&socket)
-        : base(parent.m_ctx, std::move(socket)), parent(parent), client_id(client_id) {}
+    connection_server_client(ParentType &parent, boost::asio::ip::tcp::socket &&socket)
+        : base(parent.m_ctx, std::move(socket)), parent(parent) {}
     
     void on_receive_message(typename MessageTypes::input_message &&msg) {
-        parent.on_receive_message(client_id, std::move(msg));
+        parent.on_receive_message(get_handle(), std::move(msg));
     }
 
     void on_error() {
         parent.print_message(fmt::format("{} disconnected ({})", address_string(), ansi_to_utf8(error_message())));
-        parent.on_disconnect(client_id);
+        parent.on_disconnect(get_handle());
     }
 
     void on_disconnect() {
         parent.print_message(fmt::format("{} disconnected", address_string()));
-        parent.on_disconnect(client_id);
+        parent.on_disconnect(get_handle());
     }
 };
 
 template<typename Derived, typename MessageTypes>
 class connection_server {
-private:
+public:
     using input_message = typename MessageTypes::input_message;
     using output_message = typename MessageTypes::output_message;
     using header_type = typename MessageTypes::header_type;
 
     using connection_type = connection_server_client<connection_server<Derived, MessageTypes>, MessageTypes>;
-    friend connection_type;
+    using connection_handle = typename connection_type::handle;
 
-    boost::asio::io_context &m_ctx;
-    boost::asio::ip::tcp::acceptor m_acceptor;
-
-    std::map<int, typename connection_type::pointer> m_clients;
-
-    int m_client_id_counter = 0;
-
-public:
     connection_server(boost::asio::io_context &ctx)
         : m_ctx(ctx), m_acceptor(ctx) {}
 
@@ -75,16 +67,12 @@ public:
     }
     
     void stop() {
-        for (auto &[id, con] : m_clients) {
-            con->disconnect();
+        for (auto &con : m_clients) {
+            if (auto ptr = con.lock()) {
+                ptr->disconnect();
+            }
         }
         m_acceptor.close();
-    }
-
-    void push_message(int client_id, output_message &&msg) {
-        if (auto it = m_clients.find(client_id); it != m_clients.end()) {
-            it->second->push_message(std::move(msg));
-        }
     }
 
 private:
@@ -92,27 +80,22 @@ private:
         m_acceptor.async_accept([this](const boost::system::error_code &ec, boost::asio::ip::tcp::socket peer) {
             if (!ec) {
                 if (m_clients.size() < banggame::server_max_clients) {
-                    int client_id = ++m_client_id_counter;
-                    auto client = connection_type::make(*this, client_id, std::move(peer));
-                    client->start();
+                    auto client = connection_type::make(*this, std::move(peer));
+                    m_clients.insert(client);
                     
+                    client->start();
                     print_message(fmt::format("{} connected", client->address_string()));
-
-                    auto it = m_clients.emplace(client_id, std::move(client)).first;
 
                     using timer_type = boost::asio::basic_waitable_timer<std::chrono::system_clock>;
                     auto timer = new timer_type(m_ctx);
 
                     timer->expires_after(net::timeout);
                     timer->async_wait(
-                        [this,
-                        timer = std::unique_ptr<timer_type>(timer),
-                        client_id = it->first, ptr = std::weak_ptr(it->second)](const boost::system::error_code &ec) {
-                            if (!ec) {
-                                if (auto client = ptr.lock()) {
-                                    if (!client_validated(client_id)) {
-                                        client->disconnect(net::connection_error::timeout_expired);
-                                    }
+                        [this, handle = std::weak_ptr(client),
+                        timer = std::unique_ptr<timer_type>(timer)](const boost::system::error_code &ec) {
+                            if (!ec && !client_validated(handle)) {
+                                if (auto client = handle.lock()) {
+                                    client->disconnect(net::connection_error::timeout_expired);
                                 }
                             }
                         });
@@ -126,18 +109,18 @@ private:
         });
     }
 
-    void on_receive_message(int client_id, input_message &&msg) {
-        static_cast<Derived &>(*this).on_receive_message(client_id, std::move(msg));
+    void on_receive_message(connection_handle client, input_message &&msg) {
+        static_cast<Derived &>(*this).on_receive_message(client, std::move(msg));
     }
 
-    void on_disconnect(int client_id) {
-        m_clients.erase(client_id);
-        static_cast<Derived &>(*this).on_disconnect(client_id);
+    void on_disconnect(connection_handle client) {
+        m_clients.erase(client);
+        static_cast<Derived &>(*this).on_disconnect(client);
     }
 
-    bool client_validated(int client_id) const {
-        if constexpr (requires (Derived obj) { obj.client_validated(client_id); }) {
-            return static_cast<const Derived &>(*this).client_validated(client_id);
+    bool client_validated(connection_handle client) const {
+        if constexpr (requires (Derived obj) { obj.client_validated(client); }) {
+            return static_cast<const Derived &>(*this).client_validated(client);
         } else {
             return true;
         }
@@ -154,6 +137,14 @@ private:
             static_cast<Derived &>(*this).print_error(msg);
         }
     }
+
+private:
+    friend connection_type;
+
+    boost::asio::io_context &m_ctx;
+    boost::asio::ip::tcp::acceptor m_acceptor;
+
+    std::set<connection_handle, std::owner_less<connection_handle>> m_clients;
 
 };
 
