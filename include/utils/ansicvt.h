@@ -7,7 +7,7 @@
 
 #include <Windows.h>
 
-std::string ansi_to_utf8(const std::string &str) {
+inline std::string ansi_to_utf8(const std::string &src) {
     if (src.empty()) return std::string();
     int cp = GetACP();
 
