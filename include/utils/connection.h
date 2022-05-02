@@ -93,7 +93,7 @@ namespace net {
                     if (m_state != connection_state::resolving) {
                         on_complete(boost::asio::error::operation_aborted);
                     } else if (ec) {
-                        handle_io_error(ec);
+                        disconnect(ec);
                         on_complete(ec);
                     } else {
                         m_state = connection_state::connecting;
@@ -103,7 +103,7 @@ namespace net {
                                 if (!ec) {
                                     m_address = host;
                                 } else {
-                                    handle_io_error(ec);
+                                    disconnect(ec);
                                 }
                                 on_complete(ec);
                             });
@@ -121,6 +121,9 @@ namespace net {
 
         void disconnect(const std::error_code &ec = {}) {
             switch (state()) {
+            case connection_state::error:
+            case connection_state::disconnected:
+                break;
             case connection_state::connecting:
             case connection_state::connected:
                 if (m_socket.is_open()) {
@@ -134,11 +137,17 @@ namespace net {
             [[fallthrough]];
             default:
                 m_out_queue.clear();
-                if (!ec) {
+                if (!ec || ec == boost::system::error_code(boost::asio::error::eof)) {
                     m_state = connection_state::disconnected;
+                    if constexpr (requires (Derived obj) { obj.on_disconnect(); }) {
+                        static_cast<Derived &>(*this).on_disconnect();
+                    }
                 } else {
                     m_ec = ec;
                     m_state = connection_state::error;
+                    if constexpr (requires (Derived obj) { obj.on_error(); }) {
+                        static_cast<Derived &>(*this).on_error();
+                    }
                 }
             }
         }
@@ -200,17 +209,17 @@ namespace net {
                                             static_cast<Derived &>(*this).on_receive_message(binary::deserialize<input_message>(m_buffer));
                                             read_next_message();
                                         } catch (const binary::read_error &error) {
-                                            handle_io_error(error.code());
+                                            disconnect(error.code());
                                         }
                                     } else {
-                                        handle_io_error(ec);
+                                        disconnect(ec);
                                     }
                                 });
                         } else {
-                            handle_io_error(connection_error::validation_failure);
+                            disconnect(connection_error::validation_failure);
                         }
                     } else {
-                        handle_io_error(ec);
+                        disconnect(ec);
                     }
                 });
         }
@@ -241,33 +250,9 @@ namespace net {
                             write_next_message();
                         }
                     } else {
-                        handle_io_error(ec);
+                        disconnect(ec);
                     }
                 });
-        }
-
-        void handle_io_error(const std::error_code &ec) {
-            switch (state()) {
-            case connection_state::disconnected:
-                break;
-            case connection_state::error:
-                m_ec = ec;
-                m_state = connection_state::error;
-                m_socket.close();
-                if constexpr (requires (Derived obj) { obj.on_error(); }) {
-                    static_cast<Derived &>(*this).on_error();
-                }
-                break;
-            default:
-                if (ec == boost::system::error_code(boost::asio::error::eof)) {
-                    m_state = connection_state::disconnected;
-                    m_socket.close();
-                    if constexpr (requires (Derived obj) { obj.on_disconnect(); }) {
-                        static_cast<Derived &>(*this).on_disconnect();
-                    }
-                }
-                break;
-            }
         }
 
     private:
