@@ -10,10 +10,9 @@
 namespace net {
 
 template<typename ParentType, typename MessageTypes>
-struct connection_server_client : connection_base<connection_server_client<ParentType, MessageTypes>, MessageTypes> {
-    using base = connection_base<connection_server_client<ParentType, MessageTypes>, MessageTypes>;
+struct connection_server_client : connection<connection_server_client<ParentType, MessageTypes>, MessageTypes> {
+    using base = connection<connection_server_client<ParentType, MessageTypes>, MessageTypes>;
     using base::address_string;
-    using base::error_message;
     using base::get_handle;
 
     ParentType &parent;
@@ -25,8 +24,8 @@ struct connection_server_client : connection_base<connection_server_client<Paren
         parent.on_receive_message(get_handle(), std::move(msg));
     }
 
-    void on_error() {
-        parent.print_message(fmt::format("{} disconnected ({})", address_string(), ansi_to_utf8(error_message())));
+    void on_error(const std::error_code &ec) {
+        parent.print_message(fmt::format("{} disconnected ({})", address_string(), ansi_to_utf8(ec.message())));
         parent.on_disconnect(get_handle());
     }
 

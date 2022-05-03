@@ -8,19 +8,10 @@
 #include <memory>
 #include <chrono>
 
-#include "tsqueue.h"
 #include "binary_serial.h"
 #include "enum_error_code.h"
 
 namespace net {
-
-    enum class connection_state : uint8_t {
-        disconnected,
-        error,
-        resolving,
-        connecting,
-        connected
-    };
 
     DEFINE_ENUM_ERROR_CODE(connection_error,
         (no_error,              "No Error")
@@ -48,7 +39,7 @@ namespace net {
     };
 
     template<typename Derived, typename MessageTypes>
-    class connection_base : public std::enable_shared_from_this<Derived> {
+    class connection : public std::enable_shared_from_this<Derived> {
     public:
         using std::enable_shared_from_this<Derived>::shared_from_this;
         using pointer = std::shared_ptr<Derived>;
@@ -64,7 +55,15 @@ namespace net {
         }
 
     protected:
-        connection_base(boost::asio::io_context &ctx, boost::asio::ip::tcp::socket &&socket)
+        enum class connection_state : uint8_t {
+            disconnected,
+            error,
+            resolving,
+            connecting,
+            connected
+        };
+
+        connection(boost::asio::io_context &ctx, boost::asio::ip::tcp::socket &&socket)
             : m_socket(std::move(socket))
             , m_strand(ctx)
             , m_timer(ctx)
@@ -74,7 +73,7 @@ namespace net {
             m_address = fmt::format("{}:{}", endpoint.address().to_string(), endpoint.port());
         }
 
-        connection_base(boost::asio::io_context &ctx)
+        connection(boost::asio::io_context &ctx)
             : m_socket(ctx)
             , m_strand(ctx)
             , m_timer(ctx)
@@ -111,16 +110,8 @@ namespace net {
                 });
         }
 
-        connection_state state() const {
-            return m_state;
-        }
-
-        std::string error_message() const {
-            return m_ec.message();
-        }
-
         void disconnect(const std::error_code &ec = {}) {
-            switch (state()) {
+            switch (m_state) {
             case connection_state::error:
             case connection_state::disconnected:
                 break;
@@ -143,10 +134,9 @@ namespace net {
                         static_cast<Derived &>(*this).on_disconnect();
                     }
                 } else {
-                    m_ec = ec;
                     m_state = connection_state::error;
-                    if constexpr (requires (Derived obj) { obj.on_error(); }) {
-                        static_cast<Derived &>(*this).on_error();
+                    if constexpr (requires (Derived obj) { obj.on_error(ec); }) {
+                        static_cast<Derived &>(*this).on_error(ec);
                     }
                 }
             }
@@ -194,9 +184,8 @@ namespace net {
                             m_timer.expires_after(timeout);
                             m_timer.async_wait([this](const boost::system::error_code &ec) {
                                 if (!ec) {
-                                    m_state = connection_state::error;
-                                    m_ec = connection_error::timeout_expired;
                                     m_socket.cancel();
+                                    disconnect(connection_error::timeout_expired);
                                 }
                             });
 
@@ -261,31 +250,11 @@ namespace net {
         boost::asio::basic_waitable_timer<std::chrono::system_clock> m_timer;
         
         std::atomic<connection_state> m_state;
-        std::error_code m_ec;
 
         std::deque<std::vector<std::byte>> m_out_queue;
 
         std::vector<std::byte> m_buffer;
         std::string m_address;
-    };
-
-    template<typename MessageTypes>
-    class connection : public connection_base<connection<MessageTypes>, MessageTypes> {
-        using input_message = typename MessageTypes::input_message;
-
-    public:
-        using connection_base<connection<MessageTypes>, MessageTypes>::connection_base;
-
-        void on_receive_message(input_message &&msg) {
-            m_in_queue.push_back(std::move(msg));
-        }
-        
-        std::optional<input_message> pop_message() {
-            return m_in_queue.pop_front();
-        }
-
-    private:
-        util::tsqueue<input_message> m_in_queue;
     };
 
 }
