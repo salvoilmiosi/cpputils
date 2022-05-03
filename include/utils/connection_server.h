@@ -12,8 +12,6 @@ namespace net {
 template<typename ParentType, typename MessageTypes>
 struct connection_server_client : connection<connection_server_client<ParentType, MessageTypes>, MessageTypes> {
     using base = connection<connection_server_client<ParentType, MessageTypes>, MessageTypes>;
-    using base::address_string;
-    using base::get_handle;
 
     ParentType &parent;
 
@@ -21,17 +19,17 @@ struct connection_server_client : connection<connection_server_client<ParentType
         : base(parent.m_ctx, std::move(socket)), parent(parent) {}
     
     void on_receive_message(typename MessageTypes::input_message &&msg) {
-        parent.on_receive_message(get_handle(), std::move(msg));
+        parent.on_receive_message(this->weak_from_this(), std::move(msg));
     }
 
     void on_error(const std::error_code &ec) {
-        parent.print_message(fmt::format("{} disconnected ({})", address_string(), ansi_to_utf8(ec.message())));
-        parent.on_disconnect(get_handle());
+        parent.print_message(fmt::format("{} disconnected ({})", this->address_string(), ansi_to_utf8(ec.message())));
+        parent.on_disconnect(this->weak_from_this());
     }
 
     void on_disconnect() {
-        parent.print_message(fmt::format("{} disconnected", address_string()));
-        parent.on_disconnect(get_handle());
+        parent.print_message(fmt::format("{} disconnected", this->address_string()));
+        parent.on_disconnect(this->weak_from_this());
     }
 };
 

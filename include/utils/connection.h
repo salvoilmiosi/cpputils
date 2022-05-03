@@ -50,10 +50,6 @@ namespace net {
             return pointer(new Derived(std::forward<Ts>(args) ... ));
         }
 
-        handle get_handle() {
-            return std::weak_ptr(shared_from_this());
-        }
-
     protected:
         enum class connection_state : uint8_t {
             disconnected,
