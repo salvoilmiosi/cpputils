@@ -20,6 +20,16 @@ namespace sdl {
     using color = SDL_Color;
     using event = SDL_Event;
 
+    inline namespace point_math {
+        constexpr sdl::point operator + (const sdl::point &lhs, const sdl::point &rhs) {
+            return {lhs.x + rhs.x, lhs.y + rhs.y};
+        }
+
+        constexpr sdl::point operator - (const sdl::point &lhs, const sdl::point &rhs) {
+            return {lhs.x - rhs.x, lhs.y - rhs.y};
+        }
+    }
+
     constexpr color rgba(uint32_t color) {
         return {
             static_cast<uint8_t>((color & 0xff000000) >> (8 * 3)),
