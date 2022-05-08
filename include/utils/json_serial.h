@@ -49,15 +49,12 @@ namespace json {
         }
     };
 
-    template<std::ranges::contiguous_range Vector>
-    requires (serializable<std::ranges::range_value_t<Vector>> && !std::is_same_v<Vector, std::string>)
-    struct serializer<Vector> {
-        using value_type = std::ranges::range_value_t<Vector>;
-
-        Json::Value operator()(const Vector &value) const {
+    template<serializable T>
+    struct serializer<std::vector<T>> {
+        Json::Value operator()(const std::vector<T> &value) const {
             Json::Value ret = Json::arrayValue;
-            for (const value_type &obj : value) {
-                ret.append(serializer<value_type>{}(obj));
+            for (const T &obj : value) {
+                ret.append(serializer<T>{}(obj));
             }
             return ret;
         }
@@ -163,15 +160,12 @@ namespace json {
         }
     };
 
-    template<std::ranges::contiguous_range Vector>
-    requires (deserializable<std::ranges::range_value_t<Vector>> && !std::is_same_v<Vector, std::string>)
-    struct deserializer<Vector> {
-        using value_type = std::ranges::range_value_t<Vector>;
-
-        Vector operator()(const Json::Value &value) const {
-            Vector ret;
+    template<deserializable T>
+    struct deserializer<std::vector<T>> {
+        std::vector<T> operator()(const Json::Value &value) const {
+            std::vector<T> ret;
             for (const auto &obj : value) {
-                ret.push_back(deserializer<value_type>{}(obj));
+                ret.push_back(deserializer<T>{}(obj));
             }
             return ret;
         }

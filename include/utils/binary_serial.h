@@ -75,24 +75,22 @@ namespace binary {
         }
     };
 
-    template<std::ranges::contiguous_range Vector> requires serializable<std::ranges::range_value_t<Vector>>
-    struct serializer<Vector> {
-        using value_type = std::ranges::range_value_t<Vector>;
-
-        void operator()(const Vector &value, byte_vector &out) const {
+    template<serializable T>
+    struct serializer<std::vector<T>> {
+        void operator()(const std::vector<T> &value, byte_vector &out) const {
             serializer<short_size_t>{}(value.size(), out);
-            for (const value_type &obj : value) {
-                serializer<value_type>{}(obj, out);
+            for (const T &obj : value) {
+                serializer<T>{}(obj, out);
             }
         }
 
-        size_t get_size(const Vector &value) const {
-            if constexpr (std::integral<value_type>) {
-                return sizeof(short_size_t) + sizeof(value_type) * value.size();
+        size_t get_size(const std::vector<T> &value) const {
+            if constexpr (std::integral<T>) {
+                return sizeof(short_size_t) + sizeof(T) * value.size();
             } else {
                 size_t ret = sizeof(short_size_t);
-                for (const value_type &obj : value) {
-                    ret += serializer<value_type>{}.get_size(obj);
+                for (const T &obj : value) {
+                    ret += serializer<T>{}.get_size(obj);
                 }
                 return ret;
             }
@@ -266,16 +264,14 @@ namespace binary {
         }
     };
 
-    template<std::ranges::contiguous_range Vector> requires deserializable<std::ranges::range_value_t<Vector>>
-    struct deserializer<Vector> {
-        using value_type = std::ranges::range_value_t<Vector>;
-
-        Vector operator()(byte_ptr &pos, byte_ptr end) const {
+    template<deserializable T>
+    struct deserializer<std::vector<T>> {
+        std::vector<T> operator()(byte_ptr &pos, byte_ptr end) const {
             auto size = deserializer<short_size_t>{}(pos, end);
-            Vector ret;
+            std::vector<T> ret;
             ret.reserve(size);
             for (short_size_t i=0; i<size; ++i) {
-                ret.push_back(deserializer<value_type>{}(pos, end));
+                ret.push_back(deserializer<T>{}(pos, end));
             }
             return ret;
         }
