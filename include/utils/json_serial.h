@@ -49,6 +49,20 @@ namespace json {
         }
     };
 
+    template<enums::enum_with_names T> requires enums::flags_enum<T>
+    struct serializer<T> {
+        Json::Value operator()(const T &value) const {
+            using namespace enums::flag_operators;
+            Json::Value ret = Json::arrayValue;
+            for (T v : enums::enum_values_v<T>) {
+                if (bool(value & v)) {
+                    ret.append(Json::String(enums::value_to_string(v)));
+                }
+            }
+            return ret;
+        }
+    };
+
     template<serializable T>
     struct serializer<std::vector<T>> {
         Json::Value operator()(const std::vector<T> &value) const {
@@ -153,6 +167,28 @@ namespace json {
     struct deserializer<T> {
         T operator()(const Json::Value &value) const {
             if (auto ret = enums::from_string<T>(value.asString())) {
+                return *ret;
+            } else {
+                throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
+            }
+        }
+    };
+
+    template<enums::enum_with_names T> requires enums::flags_enum<T>
+    struct deserializer<T> {
+        T operator()(const Json::Value &value) const {
+            using namespace enums::flag_operators;
+            if (value.isArray()) {
+                T ret{};
+                for (const auto &elem : value) {
+                    if (auto v = enums::value_from_string<T>(elem.asString())) {
+                        ret |= *v;
+                    } else {
+                        throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.asString()));
+                    }
+                }
+                return ret;
+            } else if (auto ret = enums::from_string<T>(value.asString())) {
                 return *ret;
             } else {
                 throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
