@@ -1,5 +1,23 @@
 cmake_minimum_required(VERSION 3.6.0)
 project(cpputils VERSION 0.1.0)
 
-add_library(cpputils INTERFACE)
-target_include_directories(cpputils INTERFACE include)
+set(cpputils_srcs src/base64.cpp)
+
+if(WIN32)
+    list(APPEND cpputils_srcs src/ansicvt.cpp)
+endif()
+
+add_library(cpputils STATIC ${cpputils_srcs})
+target_include_directories(cpputils PUBLIC include)
+set_property(TARGET cpputils PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+find_package(fmt REQUIRED)
+if (TARGET fmt::fmt-header-only)
+    target_link_libraries(cpputils PUBLIC fmt::fmt-header-only)
+else()
+    target_link_libraries(cpputils fmt::fmt)
+endif()
+
+add_subdirectory(external/boostpp)
+target_link_libraries(cpputils PUBLIC boost_preprocessor)
+target_include_directories(cpputils PUBLIC external/asio/asio/include)

@@ -1,7 +1,7 @@
 #ifndef __CONNECTION_H__
 #define __CONNECTION_H__
 
-#include <boost/asio.hpp>
+#include <asio.hpp>
 #include <fmt/core.h>
 
 #include <vector>
@@ -59,7 +59,7 @@ namespace net {
             connected
         };
 
-        connection(boost::asio::io_context &ctx, boost::asio::ip::tcp::socket &&socket)
+        connection(asio::io_context &ctx, asio::ip::tcp::socket &&socket)
             : m_socket(std::move(socket))
             , m_strand(ctx)
             , m_timer(ctx)
@@ -69,7 +69,7 @@ namespace net {
             m_address = fmt::format("{}:{}", endpoint.address().to_string(), endpoint.port());
         }
 
-        connection(boost::asio::io_context &ctx)
+        connection(asio::io_context &ctx)
             : m_socket(ctx)
             , m_strand(ctx)
             , m_timer(ctx)
@@ -78,15 +78,15 @@ namespace net {
     public:
         void connect(const std::string &host, uint16_t port, auto &&on_complete) {
             auto self(shared_from_this());
-            auto resolver = new boost::asio::ip::tcp::resolver(m_socket.get_executor());
+            auto resolver = new asio::ip::tcp::resolver(m_socket.get_executor());
             m_state = connection_state::resolving;
-            resolver->async_resolve(boost::asio::ip::tcp::v4(), host, std::to_string(port),
+            resolver->async_resolve(asio::ip::tcp::v4(), host, std::to_string(port),
                 [this, self, host = fmt::format("{}:{}", host, port),
-                    resolver = std::unique_ptr<boost::asio::ip::tcp::resolver>(resolver),
+                    resolver = std::unique_ptr<asio::ip::tcp::resolver>(resolver),
                     on_complete = std::move(on_complete)]
-                (const boost::system::error_code &ec, boost::asio::ip::tcp::resolver::results_type results) mutable {
+                (const std::error_code &ec, asio::ip::tcp::resolver::results_type results) mutable {
                     if (m_state != connection_state::resolving) {
-                        on_complete(boost::asio::error::operation_aborted);
+                        on_complete(asio::error::operation_aborted);
                     } else if (ec) {
                         disconnect(ec);
                         on_complete(ec);
@@ -94,7 +94,7 @@ namespace net {
                         m_state = connection_state::connecting;
                         m_socket.async_connect(*results,
                             [this, self, host = std::move(host), on_complete = std::move(on_complete)]
-                            (const boost::system::error_code &ec) {
+                            (const std::error_code &ec) {
                                 if (!ec) {
                                     m_address = host;
                                 } else {
@@ -114,17 +114,17 @@ namespace net {
             case connection_state::connecting:
             case connection_state::connected:
                 if (m_socket.is_open()) {
-                    boost::asio::post(m_socket.get_executor(),
+                    asio::post(m_socket.get_executor(),
                         [this, self = shared_from_this()]{
-                            boost::system::error_code ec;
-                            m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+                            std::error_code ec;
+                            m_socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
                             m_socket.close(ec);
                         });
                 }
             [[fallthrough]];
             default:
                 m_out_queue.clear();
-                if (!ec || ec == boost::system::error_code(boost::asio::error::eof)) {
+                if (!ec || ec == std::error_code(asio::error::eof)) {
                     m_state = connection_state::disconnected;
                     if constexpr (requires (Derived obj) { obj.on_disconnect(); }) {
                         static_cast<Derived &>(*this).on_disconnect();
@@ -146,8 +146,8 @@ namespace net {
         template<typename ... Ts>
         void push_message(Ts && ... args) {
             auto self(shared_from_this());
-            boost::asio::post(m_socket.get_executor(),
-                boost::asio::bind_executor(m_strand,
+            asio::post(m_socket.get_executor(),
+                asio::bind_executor(m_strand,
                     [this, self, ... args = std::forward<Ts>(args)] () mutable {
                         bool empty = m_out_queue.empty();
                         m_out_queue.push_back(wrap_message(std::forward<Ts>(args) ... ));
@@ -172,13 +172,13 @@ namespace net {
         void read_next_message() {
             auto self(shared_from_this());
             m_buffer.resize(sizeof(header_type));
-            boost::asio::async_read(m_socket, boost::asio::buffer(m_buffer),
-                [this, self](const boost::system::error_code &ec, size_t nbytes) {
+            asio::async_read(m_socket, asio::buffer(m_buffer),
+                [this, self](const std::error_code &ec, size_t nbytes) {
                     if (!ec) {
                         header_type h = binary::deserialize<header_type>(m_buffer);
                         if (h.validate()) {
                             m_timer.expires_after(timeout);
-                            m_timer.async_wait([this](const boost::system::error_code &ec) {
+                            m_timer.async_wait([this](const std::error_code &ec) {
                                 if (!ec) {
                                     m_socket.cancel();
                                     disconnect(connection_error::timeout_expired);
@@ -186,8 +186,8 @@ namespace net {
                             });
 
                             m_buffer.resize(h.length);
-                            boost::asio::async_read(m_socket, boost::asio::buffer(m_buffer),
-                                [this, self](const boost::system::error_code &ec, size_t nbytes) {
+                            asio::async_read(m_socket, asio::buffer(m_buffer),
+                                [this, self](const std::error_code &ec, size_t nbytes) {
                                     m_timer.cancel();
                                     if (!ec) {
                                         try {
@@ -227,8 +227,8 @@ namespace net {
 
         void write_next_message() {
             auto self(shared_from_this());
-            boost::asio::async_write(m_socket, boost::asio::buffer(m_out_queue.front()),
-                [this, self](const boost::system::error_code &ec, size_t nbytes) {
+            asio::async_write(m_socket, asio::buffer(m_out_queue.front()),
+                [this, self](const std::error_code &ec, size_t nbytes) {
                     if (!ec) {
                         m_out_queue.pop_front();
                         if (!m_out_queue.empty()) {
@@ -241,9 +241,9 @@ namespace net {
         }
 
     private:
-        boost::asio::ip::tcp::socket m_socket;
-        boost::asio::io_context::strand m_strand;
-        boost::asio::basic_waitable_timer<std::chrono::system_clock> m_timer;
+        asio::ip::tcp::socket m_socket;
+        asio::io_context::strand m_strand;
+        asio::basic_waitable_timer<std::chrono::system_clock> m_timer;
         
         std::atomic<connection_state> m_state;
 

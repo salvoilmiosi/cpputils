@@ -15,7 +15,7 @@ struct connection_server_client : connection<connection_server_client<ParentType
 
     ParentType &parent;
 
-    connection_server_client(ParentType &parent, boost::asio::ip::tcp::socket &&socket)
+    connection_server_client(ParentType &parent, asio::ip::tcp::socket &&socket)
         : base(parent.m_ctx, std::move(socket)), parent(parent) {}
     
     void on_receive_message(typename MessageTypes::input_message &&msg) {
@@ -43,16 +43,16 @@ public:
     using connection_type = connection_server_client<connection_server<Derived, MessageTypes>, MessageTypes>;
     using connection_handle = typename connection_type::handle;
 
-    connection_server(boost::asio::io_context &ctx)
+    connection_server(asio::io_context &ctx)
         : m_ctx(ctx), m_acceptor(ctx) {}
 
     bool start(uint16_t port) {
         try {
-            boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), port);
+            asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), port);
             m_acceptor.open(endpoint.protocol());
             m_acceptor.bind(endpoint);
             m_acceptor.listen();
-        } catch (const boost::system::system_error &error) {
+        } catch (const std::system_error &error) {
             print_error(ansi_to_utf8(error.code().message()));
             return false;
         }
@@ -74,7 +74,7 @@ public:
 
 private:
     void start_accepting() {
-        m_acceptor.async_accept([this](const boost::system::error_code &ec, boost::asio::ip::tcp::socket peer) {
+        m_acceptor.async_accept([this](const std::error_code &ec, asio::ip::tcp::socket peer) {
             if (!ec) {
                 if (m_clients.size() < banggame::server_max_clients) {
                     auto client = connection_type::make(*this, std::move(peer));
@@ -83,13 +83,13 @@ private:
                     client->start();
                     print_message(fmt::format("{} connected", client->address_string()));
 
-                    using timer_type = boost::asio::basic_waitable_timer<std::chrono::system_clock>;
+                    using timer_type = asio::basic_waitable_timer<std::chrono::system_clock>;
                     auto timer = new timer_type(m_ctx);
 
                     timer->expires_after(net::timeout);
                     timer->async_wait(
                         [this, handle = std::weak_ptr(client),
-                        timer = std::unique_ptr<timer_type>(timer)](const boost::system::error_code &ec) {
+                        timer = std::unique_ptr<timer_type>(timer)](const std::error_code &ec) {
                             if (!ec && !client_validated(handle)) {
                                 if (auto client = handle.lock()) {
                                     client->disconnect(net::connection_error::timeout_expired);
@@ -100,7 +100,7 @@ private:
                     peer.close();
                 }
             }
-            if (ec != boost::asio::error::operation_aborted) {
+            if (ec != asio::error::operation_aborted) {
                 start_accepting();
             }
         });
@@ -138,8 +138,8 @@ private:
 private:
     friend connection_type;
 
-    boost::asio::io_context &m_ctx;
-    boost::asio::ip::tcp::acceptor m_acceptor;
+    asio::io_context &m_ctx;
+    asio::ip::tcp::acceptor m_acceptor;
 
     std::set<connection_handle, std::owner_less<connection_handle>> m_clients;
 

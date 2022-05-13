@@ -77,7 +77,7 @@ namespace json {
     template<>
     struct serializer<std::vector<std::byte>> {
         Json::Value operator()(const std::vector<std::byte> &value) const {
-            return base64_encode(value.data(), value.size());
+            return base64_encode(value);
         }
     };
 
