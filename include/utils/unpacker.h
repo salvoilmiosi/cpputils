@@ -120,6 +120,10 @@ public:
         return ret;
     }
 
+    bool contains(std::string_view key) const {
+        return m_data.find(key) != m_data.end();
+    }
+
     decltype(m_data)::const_iterator seek(std::string_view key) const {
         auto it = m_data.find(key);
         if (it == m_data.end()) {
