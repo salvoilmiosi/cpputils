@@ -35,7 +35,7 @@ namespace enums {
     template<enumeral auto E> constexpr enum_tag_t<E> enum_tag;
 
     template<typename T, typename E> concept enum_tag_for = requires {
-        enumeral<E>;
+        requires enumeral<E>;
         { T::value } -> std::convertible_to<E>;
     };
 
@@ -91,6 +91,36 @@ namespace enums {
 
     template<flags_enum T> constexpr T flags_none = static_cast<T>(0);
     template<flags_enum T> constexpr T flags_all = static_cast<T>((1 << num_members_v<T>) - 1);
+
+    inline namespace flag_operators {
+        template<flags_enum T> constexpr T operator & (T lhs, T rhs) {
+            return static_cast<T>(to_underlying(lhs) & to_underlying(rhs));
+        }
+
+        template<flags_enum T> constexpr T &operator &= (T &lhs, T rhs) {
+            return lhs = lhs & rhs;
+        }
+
+        template<flags_enum T> constexpr T operator | (T lhs, T rhs) {
+            return static_cast<T>(to_underlying(lhs) | to_underlying(rhs));
+        }
+
+        template<flags_enum T> constexpr T &operator |= (T &lhs, T rhs) {
+            return lhs = lhs | rhs;
+        }
+
+        template<flags_enum T> constexpr T operator ~ (T value) {
+            return static_cast<T>(~to_underlying(value));
+        }
+
+        template<flags_enum T> constexpr T operator ^ (T lhs, T rhs) {
+            return static_cast<T>(to_underlying(lhs) ^ to_underlying(rhs));
+        }
+
+        template<flags_enum T> constexpr T &operator ^= (T &lhs, T rhs) {
+            return lhs = lhs ^ rhs;
+        }
+    }
 
     template<reflected_enum T> constexpr size_t indexof(T value) {
         if constexpr (linear_enum<T>) {
@@ -238,36 +268,6 @@ namespace enums {
             str = str.substr(pos);
         }
         return ret;
-    }
-
-    inline namespace flag_operators {
-        template<flags_enum T> constexpr T operator & (T lhs, T rhs) {
-            return static_cast<T>(to_underlying(lhs) & to_underlying(rhs));
-        }
-
-        template<flags_enum T> constexpr T &operator &= (T &lhs, T rhs) {
-            return lhs = lhs & rhs;
-        }
-
-        template<flags_enum T> constexpr T operator | (T lhs, T rhs) {
-            return static_cast<T>(to_underlying(lhs) | to_underlying(rhs));
-        }
-
-        template<flags_enum T> constexpr T &operator |= (T &lhs, T rhs) {
-            return lhs = lhs | rhs;
-        }
-
-        template<flags_enum T> constexpr T operator ~ (T value) {
-            return static_cast<T>(~to_underlying(value));
-        }
-
-        template<flags_enum T> constexpr T operator ^ (T lhs, T rhs) {
-            return static_cast<T>(to_underlying(lhs) ^ to_underlying(rhs));
-        }
-
-        template<flags_enum T> constexpr T &operator ^= (T &lhs, T rhs) {
-            return lhs = lhs ^ rhs;
-        }
     }
     
     template<typename RetType, typename Function, reflected_enum T> RetType visit_enum(Function &&fun, T value) {

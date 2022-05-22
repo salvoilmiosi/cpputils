@@ -56,18 +56,21 @@ namespace reflector {
         };
 
         template<typename T, size_t I>
-        concept has_field_data = requires(T &t) {
+        static constexpr bool has_field_data_v = requires(T &t) {
             typename T::template reflector_field_data<I, T>;
             { typename T::template reflector_field_data<I, T>(t) } -> is_field_data;
+        };
+
+        template<typename T, size_t ... Is>
+        constexpr bool check_has_field_data(std::index_sequence<Is...>) {
+            return (has_field_data_v<T, Is> && ...);
         };
     }
 
     template<typename T>
     concept reflectable = requires {
         typename T::reflector_num_fields;
-        requires []<size_t ... Is>(std::index_sequence<Is...>) {
-            return (detail::has_field_data<T, Is> && ...);
-        }(std::make_index_sequence<T::reflector_num_fields::value>());
+        requires detail::check_has_field_data<T>(std::make_index_sequence<T::reflector_num_fields::value>());
     };
 
     template<reflectable ... Ts> struct reflectable_base : Ts ... {
