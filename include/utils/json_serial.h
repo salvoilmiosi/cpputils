@@ -156,7 +156,9 @@ namespace json {
                 ([&]{
                     auto field_data = reflector::get_field_data<I>(ret);
                     auto &field = field_data.get();
-                    field = deserializer<std::remove_cvref_t<decltype(field)>>{}(value[field_data.name()]);
+                    if (value.isMember(field_data.name())) {
+                        field = deserializer<std::remove_cvref_t<decltype(field)>>{}(value[field_data.name()]);
+                    }
                 }(), ...);
             }(std::make_index_sequence<reflector::num_fields<T>>());
             return ret;
@@ -228,6 +230,9 @@ namespace json {
     template<enums::reflected_enum T>
     struct deserializer<enums::enum_variant<T>> {
         enums::enum_variant<T> operator()(const Json::Value &value) const {
+            if (!value.isMember("type")) {
+                throw Json::RuntimeError("Campo type mancante in enums::enum_variant");
+            }
             return enums::visit_enum([&](enums::enum_tag_for<T> auto tag) {
                 if constexpr (enums::value_with_type<tag.value>) {
                     return enums::enum_variant<T>(tag, deserializer<enums::enum_type_t<tag.value>>{}(value["value"]));
@@ -242,6 +247,9 @@ namespace json {
     struct deserializer<std::variant<Ts ...>> {
         using variant_type = std::variant<Ts ...>;
         variant_type operator()(const Json::Value &value) const {
+            if (!value.isMember("index")) {
+                throw Json::RuntimeError("Campo index mancante in std::variant");
+            }
             static constexpr auto lut = []<size_t ... Is>(std::index_sequence<Is...>){
                 return std::array{ +[](const Json::Value &value) -> variant_type {
                     return deserializer<std::variant_alternative_t<Is, variant_type>>{}(value);
