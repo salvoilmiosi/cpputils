@@ -9,7 +9,6 @@ endif()
 
 add_library(cpputils STATIC ${cpputils_srcs})
 target_include_directories(cpputils PUBLIC include)
-set_property(TARGET cpputils PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 find_package(fmt REQUIRED)
 if (TARGET fmt::fmt-header-only)
@@ -20,4 +19,9 @@ endif()
 
 add_subdirectory(external/boostpp)
 target_link_libraries(cpputils PUBLIC boost_preprocessor)
-target_include_directories(cpputils PUBLIC external/asio/asio/include)
+
+add_library(asio INTERFACE)
+target_include_directories(asio INTERFACE external/asio/asio/include)
+if(MINGW)
+    target_link_libraries(asio INTERFACE wsock32 ws2_32)
+endif()
