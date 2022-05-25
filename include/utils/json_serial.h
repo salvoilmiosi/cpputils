@@ -92,14 +92,15 @@ namespace json {
         }
     };
 
-    template<enums::reflected_enum T>
-    struct serializer<enums::enum_variant<T>> {
-        Json::Value operator()(const enums::enum_variant<T> &value) const {
-            return enums::visit_indexed([]<T Value>(enums::enum_tag_t<Value>, auto && ... args) {
+    template<enums::is_enum_variant T>
+    struct serializer<T> {
+        Json::Value operator()(const T &value) const {
+            using enum_type = typename T::enum_type;
+            return enums::visit_indexed([](enums::enum_tag_for<enum_type> auto tag, auto && ... args) {
                 Json::Value ret = Json::objectValue;
-                ret["type"] = serializer<T>{}(Value);
+                ret["type"] = serializer<enum_type>{}(tag.value);
                 if constexpr (sizeof...(args) > 0) {
-                    ret["value"] = serializer<enums::enum_type_t<Value>>{}(std::forward<decltype(args)>(args) ... );
+                    ret["value"] = serializer<typename T::value_type<tag.value>>{}(std::forward<decltype(args)>(args) ... );
                 }
                 return ret;
             }, value);
@@ -227,19 +228,20 @@ namespace json {
         }
     };
 
-    template<enums::reflected_enum T>
-    struct deserializer<enums::enum_variant<T>> {
-        enums::enum_variant<T> operator()(const Json::Value &value) const {
+    template<enums::is_enum_variant T>
+    struct deserializer<T> {
+        T operator()(const Json::Value &value) const {
             if (!value.isMember("type")) {
                 throw Json::RuntimeError("Campo type mancante in enums::enum_variant");
             }
-            return enums::visit_enum([&](enums::enum_tag_for<T> auto tag) {
-                if constexpr (enums::value_with_type<tag.value>) {
-                    return enums::enum_variant<T>(tag, deserializer<enums::enum_type_t<tag.value>>{}(value["value"]));
+            using enum_type = typename T::enum_type;
+            return enums::visit_enum([&](enums::enum_tag_for<enum_type> auto tag) {
+                if constexpr (!std::is_void_v<typename T::value_type<tag.value>>) {
+                    return T(tag, deserializer<typename T::value_type<tag.value>>{}(value["value"]));
                 } else {
-                    return enums::enum_variant<T>(tag);
+                    return T(tag);
                 }
-            }, deserializer<T>{}(value["type"]));
+            }, deserializer<enum_type>{}(value["type"]));
         }
     };
 

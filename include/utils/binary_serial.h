@@ -153,18 +153,8 @@ namespace binary {
         }
     };
 
-    template<enums::reflected_enum T>
-    struct serializer<enums::enum_variant<T>> {
-        void operator()(const enums::enum_variant<T> &value, byte_vector &out) const {
-            using type = enums::enum_variant_base<T>;
-            serializer<type>{}(static_cast<const type &>(value), out);
-        }
-
-        size_t get_size(const enums::enum_variant<T> &value) const {
-            using type = enums::enum_variant_base<T>;
-            return serializer<type>{}.get_size(static_cast<const type &>(value));
-        }
-    };
+    template<enums::is_enum_variant T>
+    struct serializer<T> : serializer<typename T::base> {};
 
     template<reflector::reflectable T>
     struct serializer<T> {
@@ -337,7 +327,7 @@ namespace binary {
                     }
                 } ... };
             }(enums::make_enum_sequence<T>());
-            if (index >= std::variant_size_v<enums::enum_variant_base<T>>) {
+            if (index >= std::variant_size_v<typename T::base>) {
                 throw read_error(read_error_code::invalid_variant_index);
             }
             return lut[index](pos, end);
