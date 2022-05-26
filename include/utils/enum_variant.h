@@ -100,9 +100,10 @@ namespace enums {
     template<typename RetType, typename Visitor, typename Variant>
     requires is_enum_variant<std::remove_const_t<Variant>>
     RetType do_visit(Visitor &&visitor, Variant &v) {
-        return visit_enum<RetType>([&](auto tag) {
-            if constexpr (Variant::template has_type<tag.value>) {
-                return std::invoke(visitor, tag, v.template get<tag.value>());
+        using enum_type = typename Variant::enum_type;
+        return visit_enum<RetType>([&]<enum_type E>(enums::enum_tag_t<E> tag) {
+            if constexpr (Variant::template has_type<E>) {
+                return std::invoke(visitor, tag, v.template get<E>());
             } else {
                 return std::invoke(visitor, tag);
             }

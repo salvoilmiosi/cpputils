@@ -25,7 +25,9 @@ namespace enums {
 
     template<size_t S> using sized_int_t = detail::sized_int_t<S, uint8_t, uint16_t, uint32_t, uint64_t>;
 
-    template<typename T> concept enumeral = std::is_enum_v<T>;
+    template<typename T> concept enumeral = requires {
+        typename std::underlying_type<T>::type;
+    };
 
     constexpr auto to_underlying(enumeral auto value) {
         return static_cast<std::underlying_type_t<decltype(value)>>(value);
@@ -33,11 +35,6 @@ namespace enums {
 
     template<enumeral auto E> struct enum_tag_t { static constexpr auto value = E; };
     template<enumeral auto E> constexpr enum_tag_t<E> enum_tag;
-
-    template<typename T, typename E> concept enum_tag_for = requires {
-        requires enumeral<E>;
-        { T::value } -> std::convertible_to<E>;
-    };
 
     template<typename T> concept reflected_enum = requires (T value) {
         requires enumeral<T>;

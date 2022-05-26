@@ -96,11 +96,11 @@ namespace json {
     struct serializer<T> {
         Json::Value operator()(const T &value) const {
             using enum_type = typename T::enum_type;
-            return enums::visit_indexed([](enums::enum_tag_for<enum_type> auto tag, auto && ... args) {
+            return enums::visit_indexed([]<enum_type E>(enums::enum_tag_t<E>, auto && ... args) {
                 Json::Value ret = Json::objectValue;
-                ret["type"] = serializer<enum_type>{}(tag.value);
+                ret["type"] = serializer<enum_type>{}(E);
                 if constexpr (sizeof...(args) > 0) {
-                    ret["value"] = serializer<typename T::value_type<tag.value>>{}(std::forward<decltype(args)>(args) ... );
+                    ret["value"] = serializer<typename T::value_type<E>>{}(std::forward<decltype(args)>(args) ... );
                 }
                 return ret;
             }, value);
@@ -235,9 +235,9 @@ namespace json {
                 throw Json::RuntimeError("Campo type mancante in enums::enum_variant");
             }
             using enum_type = typename T::enum_type;
-            return enums::visit_enum([&](enums::enum_tag_for<enum_type> auto tag) {
-                if constexpr (T::template has_type<tag.value>) {
-                    return T(tag, deserializer<typename T::value_type<tag.value>>{}(value["value"]));
+            return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
+                if constexpr (T::template has_type<E>) {
+                    return T(tag, deserializer<typename T::value_type<E>>{}(value["value"]));
                 } else {
                     return T(tag);
                 }
