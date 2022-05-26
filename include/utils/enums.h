@@ -201,7 +201,12 @@ namespace enums {
     };
 
     template<reflected_enum auto E> requires value_with_type<E>
-    using enum_type_t = decltype(reflector<decltype(E)>::get_type(enum_tag<E>));
+    struct enum_type { 
+        using type = decltype(reflector<decltype(E)>::get_type(enum_tag<E>));
+    };
+
+    template<reflected_enum auto E> requires value_with_type<E>
+    using enum_type_t = typename enum_type<E>::type;
 
     template<typename T> concept enum_with_names = requires {
         requires reflected_enum<T>;

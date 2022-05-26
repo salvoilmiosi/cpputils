@@ -236,7 +236,7 @@ namespace json {
             }
             using enum_type = typename T::enum_type;
             return enums::visit_enum([&](enums::enum_tag_for<enum_type> auto tag) {
-                if constexpr (!std::is_void_v<typename T::value_type<tag.value>>) {
+                if constexpr (T::template has_type<tag.value>) {
                     return T(tag, deserializer<typename T::value_type<tag.value>>{}(value["value"]));
                 } else {
                     return T(tag);
