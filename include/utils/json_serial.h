@@ -77,7 +77,7 @@ namespace json {
     template<>
     struct serializer<std::vector<std::byte>> {
         Json::Value operator()(const std::vector<std::byte> &value) const {
-            return base64_encode(value);
+            return base64::base64_encode(value);
         }
     };
 
@@ -213,7 +213,7 @@ namespace json {
     template<>
     struct deserializer<std::vector<std::byte>> {
         std::vector<std::byte> operator()(const Json::Value &value) const {
-            return base64_decode(value.asString());
+            return base64::base64_decode(value.asString());
         }
     };
 
