@@ -3,6 +3,8 @@
 
 #include <type_traits>
 
+#define FWD(x) std::forward<decltype(x)>(x)
+
 namespace util {
 
     template<typename ... Ts> struct type_list {

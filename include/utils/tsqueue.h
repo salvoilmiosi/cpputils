@@ -5,6 +5,8 @@
 #include <deque>
 #include <optional>
 
+#include "type_list.h"
+
 namespace util {
     template<typename T, size_t MaxSize = std::numeric_limits<size_t>::max()>
     class tsqueue {
@@ -17,10 +19,9 @@ namespace util {
         tsqueue &operator = (tsqueue &&) = delete;
 
     public:
-        template<typename ... Ts>
-        T &emplace_back(Ts && ... args) {
+        T &emplace_back(auto && ... args) {
             std::scoped_lock lock(m_mutex);
-            T &ret = m_queue.emplace_back(std::forward<Ts>(args) ... );
+            T &ret = m_queue.emplace_back(FWD(args) ... );
             if (m_queue.size() > MaxSize) {
                 m_queue.pop_front();
             }

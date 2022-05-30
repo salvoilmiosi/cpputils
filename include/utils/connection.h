@@ -45,9 +45,8 @@ namespace net {
         using pointer = std::shared_ptr<Derived>;
         using handle = std::weak_ptr<Derived>;
 
-        template<typename ... Ts>
-        static pointer make(Ts && ... args) {
-            return pointer(new Derived(std::forward<Ts>(args) ... ));
+        static pointer make(auto && ... args) {
+            return pointer(new Derived(FWD(args) ... ));
         }
 
     protected:
@@ -143,14 +142,13 @@ namespace net {
         }
         
     public:
-        template<typename ... Ts>
-        void push_message(Ts && ... args) {
+        void push_message(auto && ... args) {
             auto self(shared_from_this());
             asio::post(m_socket.get_executor(),
                 asio::bind_executor(m_strand,
-                    [this, self, ... args = std::forward<Ts>(args)] () mutable {
+                    [this, self, ... args = FWD(args)] () mutable {
                         bool empty = m_out_queue.empty();
-                        m_out_queue.push_back(wrap_message(std::forward<Ts>(args) ... ));
+                        m_out_queue.push_back(wrap_message(std::move(args) ... ));
                         if (empty) {
                             write_next_message();
                         }
@@ -209,9 +207,8 @@ namespace net {
                 });
         }
 
-        template<typename ... Ts>
-        std::vector<std::byte> wrap_message(Ts && ... args) {
-            const output_message msg(std::forward<Ts>(args) ... );
+        std::vector<std::byte> wrap_message(auto && ... args) {
+            const output_message msg(FWD(args) ... );
             
             header_type h;
             h.length = binary::get_size(msg);

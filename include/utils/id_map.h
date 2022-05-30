@@ -119,7 +119,7 @@ namespace util {
 
         template<std::convertible_to<IdGetter> U>
         requires (!std::is_default_constructible_v<IdGetter>)
-        id_map(T &&id_getter) : IdGetter(std::forward<U>(id_getter)) {}
+        id_map(U &&id_getter) : IdGetter(std::forward<U>(id_getter)) {}
 
         iterator begin() { return iterator::make_begin(*this, m_data.begin(), m_data.end()); }
         const_iterator cbegin() const { return const_iterator::make_begin(*this, m_data.cbegin(), m_data.cend()); }
@@ -158,14 +158,12 @@ namespace util {
             return m_data[id - 1] = std::move(ptr);
         }
 
-        template<typename ... Ts>
-        T &emplace(Ts && ... args) {
-            return *insert(std::make_unique<T>(std::forward<Ts>(args) ... ));
+        T &emplace(auto && ... args) {
+            return *insert(std::make_unique<T>(FWD(args) ... ));
         }
 
-        template<typename ... Ts>
-        std::pair<T &, bool> try_emplace(Ts && ... args) {
-            auto ptr = std::make_unique<T>(std::forward<Ts>(args) ... );
+        std::pair<T &, bool> try_emplace(auto && ... args) {
+            auto ptr = std::make_unique<T>(FWD(args) ... );
             size_t id = get_id(*ptr);
             if (id > m_data.size()) {
                 m_data.resize(id);

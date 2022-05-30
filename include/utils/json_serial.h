@@ -100,7 +100,7 @@ namespace json {
                 Json::Value ret = Json::objectValue;
                 ret["type"] = serializer<enum_type>{}(E);
                 if constexpr (sizeof...(args) > 0) {
-                    ret["value"] = serializer<typename T::value_type<E>>{}(std::forward<decltype(args)>(args) ... );
+                    ret["value"] = serializer<typename T::value_type<E>>{}(FWD(args) ... );
                 }
                 return ret;
             }, value);

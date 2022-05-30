@@ -45,9 +45,9 @@ namespace enums {
 
         using base::variant;
 
-        template<Enum Value, typename ... Ts>
-        enum_variant(enum_tag_t<Value>, Ts && ... args)
-            : base(std::in_place_index<indexof(Value)>, std::forward<Ts>(args) ...) {}
+        template<Enum Value>
+        enum_variant(enum_tag_t<Value>, auto && ... args)
+            : base(std::in_place_index<indexof(Value)>, FWD(args) ...) {}
 
         base &variant_base() {
             return static_cast<base &>(*this);
@@ -57,9 +57,9 @@ namespace enums {
             return static_cast<const base &>(*this);
         }
 
-        template<Enum Value, typename ... Ts>
-        auto &emplace(Ts && ... args) {
-            return base::template emplace<indexof(Value)>(std::forward<Ts>(args) ...);
+        template<Enum Value>
+        auto &emplace(auto && ... args) {
+            return base::template emplace<indexof(Value)>(FWD(args) ...);
         }
         
         Enum enum_index() const {
