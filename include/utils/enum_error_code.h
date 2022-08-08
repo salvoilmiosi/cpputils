@@ -28,12 +28,15 @@ namespace enums {
             }
         }
 
-        static inline const error_code_enum_category instance;
+        static const error_code_enum_category& instance() {
+            static const error_code_enum_category ret;
+            return ret;
+        }
     };
 
     template<error_code_enum E>
     inline std::error_code make_error_code(E ec) {
-        return {static_cast<int>(ec), error_code_enum_category<E>::instance};
+        return {static_cast<int>(ec), error_code_enum_category<E>::instance()};
     }
 }
 

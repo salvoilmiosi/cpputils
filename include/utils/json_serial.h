@@ -100,7 +100,7 @@ namespace json {
                 Json::Value ret = Json::objectValue;
                 ret["type"] = serializer<enum_type>{}(E);
                 if constexpr (sizeof...(args) > 0) {
-                    ret["value"] = serializer<typename T::value_type<E>>{}(FWD(args) ... );
+                    ret["value"] = serializer<typename T::template value_type<E>>{}(FWD(args) ... );
                 }
                 return ret;
             }, value);
@@ -169,10 +169,15 @@ namespace json {
     template<enums::enum_with_names T>
     struct deserializer<T> {
         T operator()(const Json::Value &value) const {
-            if (auto ret = enums::from_string<T>(value.asString())) {
-                return *ret;
+            if (value.isString()) {
+                std::string str = value.asString();
+                if (auto ret = enums::from_string<T>(str)) {
+                    return *ret;
+                } else {
+                    throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
+                }
             } else {
-                throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
+                throw Json::RuntimeError("Value is not a string");
             }
         }
     };
@@ -184,17 +189,25 @@ namespace json {
             if (value.isArray()) {
                 T ret{};
                 for (const auto &elem : value) {
-                    if (auto v = enums::value_from_string<T>(elem.asString())) {
-                        ret |= *v;
+                    if (elem.isString()) {
+                        if (auto v = enums::value_from_string<T>(elem.asString())) {
+                            ret |= *v;
+                        } else {
+                            throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.asString()));
+                        }
                     } else {
-                        throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.asString()));
+                        throw Json::RuntimeError("Elem is not a string");
                     }
                 }
                 return ret;
-            } else if (auto ret = enums::from_string<T>(value.asString())) {
-                return *ret;
+            } else if (value.isString()) {
+                if (auto ret = enums::from_string<T>(value.asString())) {
+                    return *ret;
+                } else {
+                    throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
+                }
             } else {
-                throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
+                throw Json::RuntimeError("Invalid type for value");
             }
         }
     };
@@ -213,7 +226,11 @@ namespace json {
     template<>
     struct deserializer<std::vector<std::byte>> {
         std::vector<std::byte> operator()(const Json::Value &value) const {
-            return base64::base64_decode(value.asString());
+            if (value.isString()) {
+                return base64::base64_decode(value.asString());
+            } else {
+                throw Json::RuntimeError("Value is not a string");
+            }
         }
     };
 
@@ -232,16 +249,17 @@ namespace json {
     struct deserializer<T> {
         T operator()(const Json::Value &value) const {
             if (!value.isMember("type")) {
-                throw Json::RuntimeError("Campo type mancante in enums::enum_variant");
+                throw Json::RuntimeError("Missing field 'type' in enums::enum_variant");
             }
             using enum_type = typename T::enum_type;
+            enum_type variant_type = deserializer<enum_type>{}(value["type"]);
             return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
                 if constexpr (T::template has_type<E>) {
-                    return T(tag, deserializer<typename T::value_type<E>>{}(value["value"]));
+                    return T(tag, deserializer<typename T::template value_type<E>>{}(value["value"]));
                 } else {
                     return T(tag);
                 }
-            }, deserializer<enum_type>{}(value["type"]));
+            }, variant_type);
         }
     };
 
@@ -250,7 +268,7 @@ namespace json {
         using variant_type = std::variant<Ts ...>;
         variant_type operator()(const Json::Value &value) const {
             if (!value.isMember("index")) {
-                throw Json::RuntimeError("Campo index mancante in std::variant");
+                throw Json::RuntimeError("Missing field 'index' in std::variant");
             }
             static constexpr auto lut = []<size_t ... Is>(std::index_sequence<Is...>){
                 return std::array{ +[](const Json::Value &value) -> variant_type {

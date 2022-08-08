@@ -22,7 +22,7 @@ inline bool is_base64(BYTE c) {
 
 inline std::string base64_encode(std::span<const std::byte> buffer) {
   const std::byte *buf = buffer.data();
-  unsigned int bufLen = buffer.size();
+  size_t bufLen = buffer.size();
 
   std::string ret;
   int i = 0;
@@ -65,7 +65,7 @@ inline std::string base64_encode(std::span<const std::byte> buffer) {
 }
 
 inline std::vector<std::byte> base64_decode(std::string_view encoded_string) {
-  int in_len = encoded_string.size();
+  size_t in_len = encoded_string.size();
   int i = 0;
   int j = 0;
   int in_ = 0;
@@ -76,7 +76,7 @@ inline std::vector<std::byte> base64_decode(std::string_view encoded_string) {
     char_array_4[i++] = encoded_string[in_]; in_++;
     if (i ==4) {
       for (i = 0; i <4; i++)
-        char_array_4[i] = base64_chars.find(char_array_4[i]);
+        char_array_4[i] = static_cast<BYTE>(base64_chars.find(char_array_4[i]));
 
       char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
       char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
@@ -93,7 +93,7 @@ inline std::vector<std::byte> base64_decode(std::string_view encoded_string) {
       char_array_4[j] = 0;
 
     for (j = 0; j <4; j++)
-      char_array_4[j] = base64_chars.find(char_array_4[j]);
+      char_array_4[j] = static_cast<BYTE>(base64_chars.find(char_array_4[j]));
 
     char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
     char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);

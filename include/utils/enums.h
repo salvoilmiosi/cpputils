@@ -9,6 +9,7 @@
 #include <ranges>
 #include <limits>
 #include <tuple>
+#include <array>
 #include <bit>
 
 namespace enums {
@@ -184,10 +185,12 @@ namespace enums {
 
     template<typename T, typename U>
     concept full_data_enum_of_type = std::same_as<U, full_data_enum_type_t<T>>;
-    
-    template<full_data_enum Enum> constexpr auto enum_data_array_v = []<Enum ... Es>(enum_sequence<Es...>) {
+
+    template<full_data_enum auto ... Es>
+    constexpr auto make_enum_data_array(enum_sequence<Es...>) {
         return std::array{ enum_data_v<Es> ... };
-    }(make_enum_sequence<Enum>());
+    }
+    template<full_data_enum E> constexpr auto enum_data_array_v = make_enum_data_array(make_enum_sequence<E>());
 
     template<full_data_enum Enum> auto get_data(Enum value) -> full_data_enum_type_t<Enum> {
         return enum_data_array_v<Enum>[indexof(value)];

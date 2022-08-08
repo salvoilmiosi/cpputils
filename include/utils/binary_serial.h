@@ -53,7 +53,7 @@ namespace binary {
 
     template<> struct serializer<std::string> {
         void operator()(const std::string &value, byte_vector &out) const {
-            serializer<short_size_t>{}(value.size(), out);
+            serializer<short_size_t>{}(static_cast<short_size_t>(value.size()), out);
             out.resize(out.size() + value.size());
             std::memcpy(out.data() + out.size() - value.size(), value.data(), value.size());
         }
@@ -99,7 +99,7 @@ namespace binary {
 
     template<> struct serializer<byte_vector> {
         void operator()(const byte_vector &value, byte_vector &out) const {
-            serializer<short_size_t>{}(value.size(), out);
+            serializer<short_size_t>{}(static_cast<short_size_t>(value.size()), out);
             out.resize(out.size() + value.size());
             std::memcpy(out.data() + out.size() - value.size(), value.data(), value.size());
         }

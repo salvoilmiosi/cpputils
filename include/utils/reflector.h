@@ -7,18 +7,25 @@
 
 #include "type_list.h"
 
+// Macro utilities
 #define REM(...) __VA_ARGS__
 #define EAT(...)
 
 // Retrieve the type
-#define TYPEOF(x) DETAIL_TYPEOF(DETAIL_TYPEOF_PROBE x,)
-#define DETAIL_TYPEOF(...) DETAIL_TYPEOF_HEAD(__VA_ARGS__)
-#define DETAIL_TYPEOF_HEAD(x, ...) REM x
-#define DETAIL_TYPEOF_PROBE(...) (__VA_ARGS__),
-// Strip off the type
-#define STRIP(x) EAT x
+// ARGTYPE( (ArgType) argName ) => ArgType
+#define ARGTYPE(x) ARGTYPE_PASS2(ARGTYPE_PASS1 x,)      // ARGTYPE_PASS2(ARGTYPE_PASS1 (ArgType) argName,)
+#define ARGTYPE_PASS1(...) (__VA_ARGS__),               // ARGTYPE_PASS2( (ArgType), argName,)
+#define ARGTYPE_PASS2(...) ARGTYPE_PASS3((__VA_ARGS__)) // ARGTYPE_PASS2(( (ArgType), argName,))
+#define ARGTYPE_PASS3(x) ARGTYPE_PASS4 x                // ARGTYPE_PASS4 ( (ArgType), argName,)
+#define ARGTYPE_PASS4(x, ...) REM x                     // REM (ArgType)
+
 // Show the type without parenthesis
-#define PAIR(x) REM x
+// ARGPAIR( (ArgType) argName ) => ArgType argName
+#define ARGPAIR(x) REM x
+
+// Strip off the type
+// ARGNAME( (ArgType) argName ) => argName
+#define ARGNAME(x) EAT x
 
 #define REFLECTABLE(...) \
 struct reflector_num_fields { \
@@ -29,21 +36,21 @@ struct reflector_field_data {}; \
 BOOST_PP_SEQ_FOR_EACH_I(REFLECT_EACH, data, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
 
 #define REFLECT_EACH(r, data, i, x) \
-PAIR(x){}; \
+ARGPAIR(x){}; \
 template<class Self> struct reflector_field_data<i, Self> { \
     static constexpr size_t index = i; \
     using self_type = Self; \
     Self &self; \
     constexpr reflector_field_data(Self &self) : self(self) {} \
     \
-    TYPEOF(x) &get() { \
-        return self.STRIP(x); \
+    ARGTYPE(x) &get() { \
+        return self.ARGNAME(x); \
     } \
-    std::add_const_t<TYPEOF(x)> &get() const { \
-        return self.STRIP(x); \
+    std::add_const_t<ARGTYPE(x)> &get() const { \
+        return self.ARGNAME(x); \
     } \
     const char *name() const { \
-        return BOOST_PP_STRINGIZE(STRIP(x)); \
+        return BOOST_PP_STRINGIZE(ARGNAME(x)); \
     } \
 };
 
@@ -139,7 +146,7 @@ namespace reflector {
     constexpr auto get_field_data(const T &x) {
         using field_data = typename detail::field_data<I, T>::type;
         using self_type = typename field_data::self_type;
-        return typename self_type::reflector_field_data<field_data::index, const self_type>(x);
+        return typename self_type::reflector_field_data<field_data::index, std::add_const_t<self_type>>(x);
     }
 }
 
