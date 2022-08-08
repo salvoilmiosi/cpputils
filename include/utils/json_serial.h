@@ -29,15 +29,21 @@ namespace json {
 
     template<reflector::reflectable T>
     struct serializer<T> {
+        template<size_t I>
+        static void serialize_field(const T &value, Json::Value &ret) {
+            const auto field_data = reflector::get_field_data<I>(value);
+            const auto &field = field_data.get();
+            ret[field_data.name()] = serializer<std::remove_cvref_t<decltype(field)>>{}(field);
+        }
+
+        template<size_t ... Is>
+        static void serialize_fields(const T &value, Json::Value &ret, std::index_sequence<Is...>) {
+            (serialize_field<Is>(value, ret), ...);
+        }
+
         Json::Value operator()(const T &value) const {
             Json::Value ret;
-            [&]<size_t ... I>(std::index_sequence<I ...>) {
-                ([&]{
-                    const auto field_data = reflector::get_field_data<I>(value);
-                    const auto &field = field_data.get();
-                    ret[field_data.name()] = serializer<std::remove_cvref_t<decltype(field)>>{}(field);
-                }(), ...);
-            }(std::make_index_sequence<reflector::num_fields<T>>());
+            serialize_fields(value, ret, std::make_index_sequence<reflector::num_fields<T>>());
             return ret;
         }
     };
@@ -151,17 +157,23 @@ namespace json {
 
     template<reflector::reflectable T> requires std::is_default_constructible_v<T>
     struct deserializer<T> {
+        template<size_t I>
+        static void deserialize_field(const Json::Value &value, T &out) {
+            auto field_data = reflector::get_field_data<I>(out);
+            auto &field = field_data.get();
+            if (value.isMember(field_data.name())) {
+                field = deserializer<std::remove_cvref_t<decltype(field)>>{}(value[field_data.name()]);
+            }
+        }
+
+        template<size_t ... Is>
+        static void deserialize_fields(const Json::Value &value, T &out, std::index_sequence<Is ...>) {
+            (deserialize_field<Is>(value, out), ...);
+        }
+
         T operator()(const Json::Value &value) const {
             T ret;
-            [&]<size_t ... I>(std::index_sequence<I ...>) {
-                ([&]{
-                    auto field_data = reflector::get_field_data<I>(ret);
-                    auto &field = field_data.get();
-                    if (value.isMember(field_data.name())) {
-                        field = deserializer<std::remove_cvref_t<decltype(field)>>{}(value[field_data.name()]);
-                    }
-                }(), ...);
-            }(std::make_index_sequence<reflector::num_fields<T>>());
+            deserialize_fields(value, ret, std::make_index_sequence<reflector::num_fields<T>>());
             return ret;
         }
     };
@@ -266,16 +278,19 @@ namespace json {
     template<deserializable ... Ts>
     struct deserializer<std::variant<Ts ...>> {
         using variant_type = std::variant<Ts ...>;
+
+        template<typename T>
+        static variant_type deserialize_alternative(const Json::Value &value) {
+            return deserializer<T>{}(value);
+        }
+
         variant_type operator()(const Json::Value &value) const {
             if (!value.isMember("index")) {
                 throw Json::RuntimeError("Missing field 'index' in std::variant");
             }
-            static constexpr auto lut = []<size_t ... Is>(std::index_sequence<Is...>){
-                return std::array{ +[](const Json::Value &value) -> variant_type {
-                    return deserializer<std::variant_alternative_t<Is, variant_type>>{}(value);
-                } ... };
-            }(std::make_index_sequence<sizeof...(Ts)>());
-            return lut[value["index"].asInt()](value["value"]);
+
+            static constexpr auto vtable = std::array { deserialize_alternative<Ts> ... };
+            return vtable[value["index"].asInt()](value["value"]);
         }
     };
 
