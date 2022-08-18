@@ -14,6 +14,9 @@ endif()
 add_subdirectory(external/boostpp)
 target_link_libraries(cpputils INTERFACE boost_preprocessor)
 
+add_subdirectory(external/jsoncpp)
+target_link_libraries(cpputils INTERFACE jsoncpp_static)
+
 add_library(asio INTERFACE)
 target_include_directories(asio INTERFACE external/asio/asio/include)
 if(MINGW)
