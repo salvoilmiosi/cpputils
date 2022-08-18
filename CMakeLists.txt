@@ -5,7 +5,11 @@ add_library(cpputils INTERFACE)
 target_include_directories(cpputils INTERFACE include)
 
 find_package(fmt REQUIRED)
-target_link_libraries(cpputils INTERFACE fmt::fmt-header-only)
+if(TARGET fmt::fmt-header-only)
+    target_link_libraries(cpputils INTERFACE fmt::fmt-header-only)
+else()
+    target_link_libraries(cpputils INTERFACE fmt::fmt)
+endif()
 
 add_subdirectory(external/boostpp)
 target_link_libraries(cpputils INTERFACE boost_preprocessor)
