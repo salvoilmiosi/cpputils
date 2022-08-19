@@ -14,10 +14,10 @@ endif()
 add_subdirectory(external/boostpp)
 target_link_libraries(cpputils INTERFACE boost_preprocessor)
 
-add_subdirectory(external/jsoncpp)
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_OBJECT_LIBS OFF)
 set(BUILD_STATIC_LIBS ON)
+add_subdirectory(external/jsoncpp)
 target_link_libraries(cpputils INTERFACE jsoncpp_static)
 
 add_library(asio INTERFACE)
