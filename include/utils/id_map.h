@@ -162,8 +162,7 @@ namespace util {
             return *insert(std::make_unique<T>(FWD(args) ... ));
         }
 
-        std::pair<T &, bool> try_emplace(auto && ... args) {
-            auto ptr = std::make_unique<T>(FWD(args) ... );
+        std::pair<T &, bool> try_insert(std::unique_ptr<T> &&ptr) {
             size_t id = get_id(*ptr);
             if (id > m_data.size()) {
                 m_data.resize(id);
@@ -179,6 +178,10 @@ namespace util {
                 ++m_size;
                 return {*(val = std::move(ptr)), true};
             }
+        }
+
+        std::pair<T &, bool> try_emplace(auto && ... args) {
+            try_insert(std::make_unique<T>(FWD(args) ... ));
         }
 
         iterator find(size_t id) {
