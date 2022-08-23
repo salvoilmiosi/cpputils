@@ -181,7 +181,7 @@ namespace util {
         }
 
         std::pair<T &, bool> try_emplace(auto && ... args) {
-            try_insert(std::make_unique<T>(FWD(args) ... ));
+            return try_insert(std::make_unique<T>(FWD(args) ... ));
         }
 
         iterator find(size_t id) {
