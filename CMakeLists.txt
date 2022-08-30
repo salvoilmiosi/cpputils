@@ -22,6 +22,7 @@ set(BUILD_SHARED_LIBS OFF)
 set(BUILD_OBJECT_LIBS OFF)
 set(BUILD_STATIC_LIBS ON)
 add_subdirectory(external/jsoncpp)
+set_target_properties(jsoncpp_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(cpputils INTERFACE jsoncpp_static)
 
 add_library(asio INTERFACE)
