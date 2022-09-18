@@ -78,6 +78,14 @@ namespace enums {
         template<Enum Value> auto &get() {
             return std::get<indexof(Value)>(*this);
         }
+
+        template<Enum Value> const auto *get_if() const {
+            return std::get_if<indexof(Value)>(this);
+        }
+
+        template<Enum Value> auto *get_if() {
+            return std::get_if<indexof(Value)>(this);
+        }
     };
 
     template<typename T> struct is_variant : std::false_type {};
