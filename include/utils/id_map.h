@@ -21,7 +21,7 @@ namespace util {
             using base_iterator = typename std::vector<std::unique_ptr<T>>::iterator;
         };
         template<typename T, typename IdGetter> struct map_unwrapper<const id_map<T, IdGetter>> {
-            using value_type = const T;
+            using value_type = T;
             using base_iterator = typename std::vector<std::unique_ptr<T>>::const_iterator;
         };
 
