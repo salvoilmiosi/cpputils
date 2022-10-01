@@ -248,7 +248,7 @@ namespace json {
             auto field_data = reflector::get_field_data<I>(out);
             auto &field = field_data.get();
             if (value.isMember(field_data.name())) {
-                field = self.deserialize_with_context<std::remove_cvref_t<decltype(field)>>(value[field_data.name()]);
+                field = self.template deserialize_with_context<std::remove_cvref_t<decltype(field)>>(value[field_data.name()]);
             }
         }
 
@@ -321,7 +321,7 @@ namespace json {
         std::vector<T> operator()(const Json::Value &value) const {
             std::vector<T> ret;
             for (const auto &obj : value) {
-                ret.push_back(this->deserialize_with_context<T>(obj));
+                ret.push_back(this->template deserialize_with_context<T>(obj));
             }
             return ret;
         }
@@ -347,7 +347,7 @@ namespace json {
         T operator()(const Json::Value &value) const {
             std::map<std::string, T> ret;
             for (auto it=value.begin(); it!=value.end(); ++it) {
-                ret.emplace(it.key(), this->deserialize_with_context<T>(*it));
+                ret.emplace(it.key(), this->template deserialize_with_context<T>(*it));
             }
             return ret;
         }
@@ -362,10 +362,10 @@ namespace json {
                 throw Json::RuntimeError("Missing field 'type' in enums::enum_variant");
             }
             using enum_type = typename T::enum_type;
-            enum_type variant_type = this->deserialize_with_context<enum_type>(value["type"]);
+            enum_type variant_type = this->template deserialize_with_context<enum_type>(value["type"]);
             return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
                 if constexpr (T::template has_type<E>) {
-                    return T(tag, this->deserialize_with_context<typename T::template value_type<E>>(value["value"]));
+                    return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(value["value"]));
                 } else {
                     return T(tag);
                 }
@@ -380,7 +380,7 @@ namespace json {
 
         template<typename T>
         static variant_type deserialize_alternative(const deserializer &self, const Json::Value &value) {
-            return self.deserialize_with_context<T>(value);
+            return self.template deserialize_with_context<T>(value);
         }
 
         variant_type operator()(const Json::Value &value) const {
