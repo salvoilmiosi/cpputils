@@ -107,11 +107,12 @@ namespace enums {
     }
 
     template<typename RetType, typename Visitor, typename Variant>
-    requires is_enum_variant<std::remove_const_t<Variant>>
-    RetType do_visit(Visitor &&visitor, Variant &v) {
-        using enum_type = typename Variant::enum_type;
+    requires is_enum_variant<std::remove_cvref_t<Variant>>
+    RetType do_visit(Visitor &&visitor, Variant &&v) {
+        using variant_type = std::remove_cvref_t<Variant>;
+        using enum_type = typename variant_type::enum_type;
         return visit_enum<RetType>([&]<enum_type E>(enums::enum_tag_t<E> tag) {
-            if constexpr (Variant::template has_type<E>) {
+            if constexpr (variant_type::template has_type<E>) {
                 return std::invoke(visitor, tag, v.template get<E>());
             } else {
                 return std::invoke(visitor, tag);
@@ -120,8 +121,8 @@ namespace enums {
     }
 
     template<typename RetType, typename Visitor, typename Variant>
-    requires is_enum_variant<std::remove_const_t<Variant>>
-    RetType visit_indexed(Visitor &&visitor, Variant &v) {
+    requires is_enum_variant<std::remove_cvref_t<Variant>>
+    RetType visit_indexed(Visitor &&visitor, Variant &&v) {
         return do_visit<RetType>(visitor, v);
     }
 
@@ -141,21 +142,22 @@ namespace enums {
     using visit_return_type_t = typename visit_return_type<Visitor, Variant, E>::type;
 
     template<typename Visitor, typename Variant>
-    requires is_enum_variant<std::remove_const_t<Variant>>
-    decltype(auto) visit_indexed(Visitor &&visitor, Variant &v) {
-        using enum_type = typename Variant::enum_type;
-        return do_visit<visit_return_type_t<Visitor, Variant, enum_type{}>>(visitor, v);
+    requires is_enum_variant<std::remove_cvref_t<Variant>>
+    decltype(auto) visit_indexed(Visitor &&visitor, Variant &&v) {
+        using variant_type = std::remove_cvref_t<Variant>;
+        using enum_type = typename variant_type::enum_type;
+        return do_visit<visit_return_type_t<Visitor, variant_type, enum_type{}>>(visitor, v);
     }
 
     template<typename RetType, typename Visitor, typename Variant>
-    requires is_enum_variant<std::remove_const_t<Variant>>
-    RetType visit(Visitor &&visitor, Variant &v) {
+    requires is_enum_variant<std::remove_cvref_t<Variant>>
+    RetType visit(Visitor &&visitor, Variant &&v) {
         return std::visit<RetType>(visitor, v.variant_base());
     }
 
     template<typename Visitor, typename Variant>
-    requires is_enum_variant<std::remove_const_t<Variant>>
-    decltype(auto) visit(Visitor &&visitor, Variant &v) {
+    requires is_enum_variant<std::remove_cvref_t<Variant>>
+    decltype(auto) visit(Visitor &&visitor, Variant &&v) {
         return std::visit(visitor, v.variant_base());
     }
 }
