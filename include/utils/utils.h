@@ -34,6 +34,10 @@ private:
 
 template<typename T> not_null(T *) -> not_null<T *>;
 
+template<typename T> struct unwrap_not_null { using type = T; };
+template<typename T> struct unwrap_not_null<not_null<T *>> { using type = T *; };
+template<typename T> using unwrap_not_null_t = typename unwrap_not_null<T>::type;
+
 inline auto to_vector(std::ranges::range auto &&range) {
     std::vector<std::ranges::range_value_t<decltype(range)>> ret;
     if constexpr(std::ranges::sized_range<decltype(range)>) {
