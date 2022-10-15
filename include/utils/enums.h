@@ -463,8 +463,12 @@ REFLECTOR_NAME(enumName) get_enum_reflector_type(enumName);
 
 #define DEFINE_ENUM_TYPES(enumName, enumElements) \
     IMPL_DEFINE_ENUM(enumName, ADD_PARENTHESES(enumElements), CREATE_ENUM_ELEMENT, ENUM_TYPE_FUNCTIONS)
+#define DEFINE_ENUM_FLAGS_TYPES(enumName, enumElements) \
+    IMPL_DEFINE_ENUM(enumName, ADD_PARENTHESES(enumElements), CREATE_FLAG_ELEMENT, ENUM_TYPE_FUNCTIONS)
 
 #define DEFINE_ENUM_FWD_TYPES(enumName, enumElements) \
     IMPL_FWD_DECLARE(ADD_PARENTHESES(enumElements)) DEFINE_ENUM_TYPES(enumName, enumElements)
+#define DEFINE_ENUM_FLAGS_FWD_TYPES(enumName, enumElements) \
+    IMPL_FWD_DECLARE(ADD_PARENTHESES(enumElements)) DEFINE_ENUM_FLAGS_TYPES(enumName, enumElements)
 
 #endif
