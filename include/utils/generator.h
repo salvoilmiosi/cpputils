@@ -3,11 +3,10 @@
 
 #include <coroutine>
 #include <variant>
-
-#include "utils.h"
+#include <ranges>
 
 namespace util {
-    struct suspend_maybe { // just a general-purpose helper
+    struct suspend_maybe {
         bool ready;
         explicit suspend_maybe(bool ready) : ready(ready) { }
         bool await_ready() const noexcept { return ready; }
@@ -19,7 +18,10 @@ namespace util {
     class [[nodiscard]] generator {
     public:
         struct promise_type;
+        class iterator;
+
         using handle_type = std::coroutine_handle<promise_type>;
+        using range_type = std::ranges::subrange<iterator, std::default_sentinel_t>;
 
     private:
         handle_type handle;
@@ -34,46 +36,36 @@ namespace util {
             explicit iterator(handle_type handle) noexcept : handle(handle) { }
 
         public:
-            // less clutter
             using iterator_category = std::input_iterator_tag;
             using value_type = std::remove_cvref_t<T>;
             using difference_type = std::ptrdiff_t;
             
             explicit iterator() = default;
 
-            // just need the one
             bool operator==(std::default_sentinel_t) const noexcept { return handle.done(); }
 
-            // need to muck around inside promise_type for this, so the definition is pulled out to break the cycle
             inline iterator &operator++();
             void operator++(int) { operator++(); }
-            // again, need to see into promise_type
-            inline T const *operator->() const noexcept;
-            T const &operator*() const noexcept { return *operator->(); }
-        };
-        iterator begin() noexcept {
-            return iterator{handle};
-        }
-        std::default_sentinel_t end() const noexcept {
-            return std::default_sentinel;
-        }
 
-        using range_type = std::ranges::subrange<iterator, std::default_sentinel_t>;
+            inline T const *operator->() const;
+            T const &operator*() const { return *operator->(); }
+        };
+
+        iterator begin() noexcept { return iterator{handle}; }
+        std::default_sentinel_t end() const noexcept { return std::default_sentinel; }
 
         struct promise_type {
-            // invariant: whenever the coroutine is non-finally suspended, this is nonempty
-            // either the T const* is nonnull or the range_type is nonempty
-            // note that neither of these own the data (T object or generator)
-            // the coroutine's suspended state is often the actual owner
-            std::variant<T const*, range_type> value = nullptr;
+            std::variant<T const*, std::exception_ptr, range_type> value = nullptr;
 
             generator get_return_object() {
                 return generator(handle_type::from_promise(*this));
             }
-            // initially suspending does not play nice with the conventional asymmetry between begin() and end()
+
             std::suspend_never initial_suspend() { return {}; }
             std::suspend_always final_suspend() noexcept { return {}; }
-            void unhandled_exception() { std::terminate(); }
+            void unhandled_exception() {
+                value = std::current_exception();
+            }
             std::suspend_always yield_value(T const &x) noexcept {
                 value = std::addressof(x);
                 return {};
@@ -93,33 +85,37 @@ namespace util {
         ~generator() { if(handle) handle.destroy(); }
         generator& operator=(generator const&) = delete;
         generator& operator=(generator &&other) noexcept {
-            // idiom: implementing assignment by swapping means the impending destruction/reuse of other implicitly handles cleanup of the resource being thrown away (which originated in *this)
             std::swap(handle, other.handle);
             return *this;
         }
     };
 
-    // these are both recursive because I can't be bothered otherwise
-    // feel free to change that if it actually bites
     template<typename T>
     inline auto generator<T>::iterator::operator++() -> iterator& {
-        std::visit(overloaded{
-            [&](T const *) { handle(); },
-            [&](range_type &r) {
-                if (r.advance(1).empty()) handle();
-            }
-        }, handle.promise().value);
+        auto *range = std::get_if<range_type>(&handle.promise().value);
+        if (!range || range->advance(1).empty()) {
+            handle.resume();
+        }
+        if (auto *ex = std::get_if<std::exception_ptr>(&handle.promise().value)) {
+            std::rethrow_exception(*ex);
+        }
         return *this;
     }
 
     template<typename T>
-    inline auto generator<T>::iterator::operator->() const noexcept -> T const* {
-        return std::visit(overloaded{
-            [](T const *x) { return x; },
-            [](range_type &r) {
+    inline auto generator<T>::iterator::operator->() const -> T const* {
+        struct visitor {
+            T const *operator()(T const *x) {
+                return x;
+            }
+            T const *operator()(std::exception_ptr ex) {
+                return nullptr;
+            }
+            T const *operator()(range_type &r) {
                 return r.begin().operator->();
             }
-        }, handle.promise().value);
+        };
+        return std::visit(visitor{}, handle.promise().value);
     }
 }
 
