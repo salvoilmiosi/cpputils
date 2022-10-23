@@ -51,7 +51,14 @@ namespace util {
             T const &operator*() const { return *operator->(); }
         };
 
-        iterator begin() noexcept { return iterator{handle}; }
+        iterator begin() {    
+            if (auto *ex = std::get_if<std::exception_ptr>(&handle.promise().value)) {
+                std::rethrow_exception(*ex);
+            } else {
+                return iterator{handle};
+            }
+        }
+
         std::default_sentinel_t end() const noexcept { return std::default_sentinel; }
 
         struct promise_type {
@@ -70,7 +77,7 @@ namespace util {
                 value = std::addressof(x);
                 return {};
             }
-            suspend_maybe await_transform(generator &&source) noexcept {
+            suspend_maybe await_transform(generator &&source) {
                 range_type range(source);
                 value = range;
                 return suspend_maybe(range.empty());
@@ -92,11 +99,12 @@ namespace util {
 
     template<typename T>
     inline auto generator<T>::iterator::operator++() -> iterator& {
-        auto *range = std::get_if<range_type>(&handle.promise().value);
+        auto *value = &handle.promise().value;
+        auto *range = std::get_if<range_type>(value);
         if (!range || range->advance(1).empty()) {
             handle.resume();
         }
-        if (auto *ex = std::get_if<std::exception_ptr>(&handle.promise().value)) {
+        if (auto *ex = std::get_if<std::exception_ptr>(value)) {
             std::rethrow_exception(*ex);
         }
         return *this;
@@ -104,18 +112,13 @@ namespace util {
 
     template<typename T>
     inline auto generator<T>::iterator::operator->() const -> T const* {
-        struct visitor {
-            T const *operator()(T const *x) {
-                return x;
-            }
-            T const *operator()(std::exception_ptr ex) {
-                return nullptr;
-            }
-            T const *operator()(range_type &r) {
-                return r.begin().operator->();
-            }
-        };
-        return std::visit(visitor{}, handle.promise().value);
+        auto *value = &handle.promise().value;
+        auto *range = std::get_if<range_type>(value);
+        if (range) {
+            return range->begin().operator->();
+        } else {
+            return std::get<T const *>(*value);
+        }
     }
 }
 
