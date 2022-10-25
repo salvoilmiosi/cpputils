@@ -7,52 +7,41 @@
 
 #include "type_list.h"
 
-// Macro utilities
-#define REM(...) __VA_ARGS__
-#define EAT(...)
+#define HELPER1(...) ((__VA_ARGS__)) HELPER2
+#define HELPER2(...) ((__VA_ARGS__)) HELPER1
+#define HELPER1_END
+#define HELPER2_END
+#define ADD_PARENTHESES(sequence) BOOST_PP_CAT(HELPER1 sequence,_END)
 
-// Retrieve the type
-// ARGTYPE( (ArgType) argName ) => ArgType
-#define ARGTYPE(x) ARGTYPE_PASS2(ARGTYPE_PASS1 x,)      // ARGTYPE_PASS2(ARGTYPE_PASS1 (ArgType) argName,)
-#define ARGTYPE_PASS1(...) (__VA_ARGS__),               // ARGTYPE_PASS2( (ArgType), argName,)
-#define ARGTYPE_PASS2(...) ARGTYPE_PASS3((__VA_ARGS__)) // ARGTYPE_PASS2(( (ArgType), argName,))
-#define ARGTYPE_PASS3(x) ARGTYPE_PASS4 x                // ARGTYPE_PASS4 ( (ArgType), argName,)
-#define ARGTYPE_PASS4(x, ...) REM x                     // REM (ArgType)
+#define REFLECT_DECLARE_FIELD_IMPL(type, name, ...) type name{__VA_ARGS__};
+#define REFLECT_DECLARE_FIELD(tuple) REFLECT_DECLARE_FIELD_IMPL tuple
 
-// Show the type without parenthesis
-// ARGPAIR( (ArgType) argName ) => ArgType argName
-#define ARGPAIR(x) REM x
-
-// Strip off the type
-// ARGNAME( (ArgType) argName ) => argName
-#define ARGNAME(x) EAT x
-
-#define REFLECTABLE(...) \
-struct reflector_num_fields { \
-    static constexpr size_t value = BOOST_PP_VARIADIC_SIZE(__VA_ARGS__); \
-}; \
-template<size_t N, class Self> \
-struct reflector_field_data {}; \
-BOOST_PP_SEQ_FOR_EACH_I(REFLECT_EACH, data, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
+#define ARGTYPE(tuple) BOOST_PP_TUPLE_ELEM(0, tuple)
+#define ARGNAME(tuple) BOOST_PP_TUPLE_ELEM(1, tuple)
 
 #define REFLECT_EACH(r, data, i, x) \
-ARGPAIR(x){}; \
+REFLECT_DECLARE_FIELD(x); \
 template<class Self> struct reflector_field_data<i, Self> { \
     static constexpr size_t index = i; \
     using self_type = Self; \
     Self &self; \
     constexpr reflector_field_data(Self &self) : self(self) {} \
-    \
-    ARGTYPE(x) &get() { \
-        return self.ARGNAME(x); \
-    } \
-    std::add_const_t<ARGTYPE(x)> &get() const { \
-        return self.ARGNAME(x); \
-    } \
-    const char *name() const { \
-        return BOOST_PP_STRINGIZE(ARGNAME(x)); \
-    } \
+    auto &get() { return self.ARGNAME(x); } \
+    const auto &get() const { return self.ARGNAME(x); } \
+    const char *name() const { return BOOST_PP_STRINGIZE(ARGNAME(x)); } \
 };
+
+#define REFLECTABLE_IMPL(elementTupleSeq) \
+struct reflector_num_fields { \
+    static constexpr size_t value = BOOST_PP_SEQ_SIZE(elementTupleSeq); \
+}; \
+template<size_t N, class Self> \
+struct reflector_field_data {}; \
+BOOST_PP_SEQ_FOR_EACH_I(REFLECT_EACH, data, elementTupleSeq)
+
+#define REFLECTABLE(elements) REFLECTABLE_IMPL(ADD_PARENTHESES(elements))
+
+#define DEFINE_STRUCT(structName, elements, ...) struct structName{REFLECTABLE(elements) __VA_ARGS__};
 
 namespace reflector {
     namespace detail {
