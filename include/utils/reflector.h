@@ -28,7 +28,7 @@ template<class Self> struct reflector_field_data<i, Self> { \
     constexpr reflector_field_data(Self &self) : self(self) {} \
     auto &get() { return self.ARGNAME(x); } \
     const auto &get() const { return self.ARGNAME(x); } \
-    const char *name() const { return BOOST_PP_STRINGIZE(ARGNAME(x)); } \
+    static constexpr const char *name() { return BOOST_PP_STRINGIZE(ARGNAME(x)); } \
 };
 
 #define REFLECTABLE_IMPL(elementTupleSeq) \
@@ -48,7 +48,7 @@ namespace reflector {
         template<typename T>
         concept is_field_data = requires(T &t) {
             t.get();
-            t.name();
+            T::name();
         };
 
         template<typename T, size_t I>
@@ -125,6 +125,11 @@ namespace reflector {
     }
 
     template<reflectable T> constexpr size_t num_fields = detail::num_fields<T>::value;
+
+    template<size_t I, reflectable T>
+    constexpr auto get_field_name() {
+        return detail::field_data<I, T>::type::name();
+    }
 
     template<size_t I, reflectable T>
     constexpr auto get_field_data(T &x) {
