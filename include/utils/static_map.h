@@ -23,7 +23,7 @@ namespace util {
             constexpr auto end() const { return m_data.end(); }
 
             constexpr auto find(const auto &key) const {
-                if (auto it = std::ranges::lower_bound(m_data, key, {}, &value_type::first); it->first == key) {
+                if (auto it = std::ranges::lower_bound(m_data, key, {}, &value_type::first); it != end() && it->first == key) {
                     return it;
                 } else {
                     return end();
