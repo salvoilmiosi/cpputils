@@ -17,6 +17,9 @@ namespace util {
             constexpr static_map(value_type (&&data)[Size]) {
                 std::ranges::move(data, m_data.begin());
                 std::ranges::sort(m_data, {}, &value_type::first);
+                if (!std::ranges::empty(std::ranges::unique(m_data, {}, &value_type::first))) {
+                    throw "Keys must be unique";
+                }
             }
 
             constexpr auto begin() const { return m_data.begin(); }
