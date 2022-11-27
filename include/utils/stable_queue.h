@@ -23,36 +23,34 @@ namespace utils {
     };
 
     template <typename T, typename Compare = std::less<T>>
-    class stable_priority_queue
-        : public std::priority_queue<stable_element<T>, std::vector<stable_element<T>>, stable_compare<T, Compare>>
-    {
-        using stableT = stable_element<T>;
-        using std::priority_queue<stableT, std::vector<stable_element<T>>, stable_compare<T, Compare>>::priority_queue;
+    class stable_priority_queue : public std::priority_queue<stable_element<T>, std::vector<stable_element<T>>, stable_compare<T, Compare>> {
+        using base = std::priority_queue<stable_element<T>, std::vector<stable_element<T>>, stable_compare<T, Compare>>;
 
     public:
-        const T &top() const { return this->c.front().first; }
-        T &top() { return this->c.front().first; }
+        using base::priority_queue;
+
+        const T &top() const { return base::c.front().first; }
+        T &top() { return base::c.front().first; }
 
         void push(const T& value) {
-            this->c.push_back(stableT{value, m_counter++});
-            std::push_heap(this->c.begin(), this->c.end(), this->comp);
+            emplace(value);
         }
 
         void push(T&& value) {
-            this->c.push_back(stableT{std::move(value), m_counter++});
-            std::push_heap(this->c.begin(), this->c.end(), this->comp);
+            emplace(std::move(value));
         }
         
-        template<class ... Args>
+        template<typename ... Args>
         void emplace(Args&&... args) {
-            this->c.emplace_back(T{std::forward<Args>(args)...}, m_counter++);
-            std::push_heap(this->c.begin(), this->c.end(), this->comp);
+            base::emplace(std::piecewise_construct,
+                std::make_tuple(std::forward<Args>(args) ...),
+                std::make_tuple(m_counter));
+            ++m_counter;
         }
 
         void pop() {
-            std::pop_heap(this->c.begin(), this->c.end(), this->comp);
-            this->c.pop_back();
-            if (this->empty()) m_counter = 0;
+            base::pop();
+            if (base::empty()) m_counter = 0;
         }
 
     protected:
