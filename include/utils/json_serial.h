@@ -9,6 +9,7 @@
 #include <json/json.h>
 #include <vector>
 #include <string>
+#include <chrono>
 #include <map>
 
 namespace json {
@@ -205,6 +206,13 @@ namespace json {
             return ret;
         }
     };
+
+    template<typename Rep, typename Period, typename Context>
+    struct serializer<std::chrono::duration<Rep, Period>, Context> {
+        Json::Value operator()(const std::chrono::duration<Rep, Period> &value) const {
+            return value.count();
+        }
+    };
     
     template<typename Context>
     struct deserializer<Json::Value, Context> {
@@ -377,6 +385,13 @@ namespace json {
 
             static constexpr auto vtable = std::array { deserialize_alternative<Ts> ... };
             return vtable[value["index"].asInt()](*this, value["value"]);
+        }
+    };
+
+    template<typename Rep, typename Period, typename Context>
+    struct deserializer<std::chrono::duration<Rep, Period>, Context> {
+        std::chrono::duration<Rep, Period> operator()(const Json::Value &value) const {
+            return std::chrono::duration<Rep, Period>{value.as<Rep>()};
         }
     };
 }
