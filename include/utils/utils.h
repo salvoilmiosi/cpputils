@@ -74,4 +74,6 @@ template<typename T> using same_if_trivial_t = typename same_if_trivial<T>::type
 template<typename T> requires (std::is_trivially_copyable_v<T>)
 struct same_if_trivial<T> { using type = T; };
 
+constexpr auto to_pointers = std::views::transform([](auto &value) { return &value; });
+
 #endif
