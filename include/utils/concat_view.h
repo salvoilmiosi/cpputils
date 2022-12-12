@@ -68,7 +68,7 @@ namespace util {
     };
 
     template<std::ranges::forward_range ... Ts>
-    class concat_view : std::ranges::view_interface<concat_view<Ts ... >> {
+    class concat_view : public std::ranges::view_interface<concat_view<Ts ... >> {
     public:
         using iterator = concat_view_iterator<Ts...>;
 
