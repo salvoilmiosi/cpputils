@@ -107,7 +107,10 @@ namespace json {
         static void serialize_field(const serializer &self, const T &value, Json::Value &ret) {
             const auto field_data = reflector::get_field_data<I>(value);
             const auto &field = field_data.get();
-            ret[field_data.name()] = self.serialize_with_context(field);
+            Json::Value json_value = self.serialize_with_context(field);
+            if (!json_value.empty()) {
+                ret[field_data.name()] = std::move(json_value);
+            }
         }
 
         template<size_t ... Is>
