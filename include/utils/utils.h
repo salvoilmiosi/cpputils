@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <ranges>
+#include <range/v3/all.hpp>
 
 template<typename T> class not_null;
 template<typename T> class not_null<T *> {
@@ -38,32 +39,6 @@ template<typename T> struct unwrap_not_null { using type = T; };
 template<typename T> struct unwrap_not_null<not_null<T *>> { using type = T *; };
 template<typename T> using unwrap_not_null_t = typename unwrap_not_null<T>::type;
 
-inline auto to_vector(std::ranges::range auto &&range) {
-    std::vector<std::ranges::range_value_t<decltype(range)>> ret;
-    if constexpr(std::ranges::sized_range<decltype(range)>) {
-        ret.reserve(std::ranges::size(range));
-    }
-    std::ranges::copy(range, std::back_inserter(ret));
-    return ret;
-}
-
-inline auto to_vector_not_null(std::ranges::range auto &&range) {
-    return to_vector(range | std::views::transform([](auto *value) {
-        return not_null(value);
-    }));
-}
-
-inline auto unwrap_vector_not_null(std::ranges::range auto &&range) {
-    return to_vector(range | std::views::transform([]<typename T>(not_null<T *> value) -> T * {
-        return value;
-    }));
-}
-
-template<std::ranges::input_range R, typename T, typename Proj = std::identity>
-requires std::indirect_binary_predicate<std::ranges::equal_to, std::projected<std::ranges::iterator_t<R>, Proj>, const T *>
-constexpr bool ranges_contains(R &&r, const T &value, Proj proj = {}) {
-    return std::ranges::find(r, value, proj) != std::ranges::end(r);
-}
 
 template<typename ... Ts> struct overloaded : Ts ... { using Ts::operator() ...; };
 template<typename ... Ts> overloaded(Ts ...) -> overloaded<Ts ...>;
@@ -73,7 +48,5 @@ template<typename T> using same_if_trivial_t = typename same_if_trivial<T>::type
 
 template<typename T> requires (std::is_trivially_copyable_v<T>)
 struct same_if_trivial<T> { using type = T; };
-
-constexpr auto to_pointers = std::views::transform([](auto &value) { return &value; });
 
 #endif

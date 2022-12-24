@@ -11,6 +11,9 @@ else()
     target_link_libraries(cpputils INTERFACE fmt::fmt)
 endif()
 
+find_package(range-v3 REQUIRED)
+target_link_libraries(cpputils INTERFACE range-v3)
+
 add_subdirectory(external/boostpp)
 target_link_libraries(cpputils INTERFACE boost_preprocessor)
 
