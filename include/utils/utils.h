@@ -12,11 +12,11 @@ public:
     not_null(std::nullptr_t) { check(); }
     not_null(T *value) : value(value) { check(); }
 
-    operator T *() { return value; }
-    operator T *() const { return value; }
+    operator T *() { check(); return value; }
+    operator T *() const { check(); return value; }
 
-    T *get() { return value; }
-    T *get() const { return value; }
+    T *get() { check(); return value; }
+    T *get() const { check(); return value; }
 
     T &operator *() { check(); return *value; }
     T &operator *() const { check(); return *value; }
