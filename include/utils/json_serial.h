@@ -5,14 +5,17 @@
 #include "reflector.h"
 #include "base64.h"
 
+#include <nlohmann/json.hpp>
+
 #include <fmt/format.h>
-#include <json/json.h>
 #include <vector>
 #include <string>
 #include <chrono>
 #include <map>
 
 namespace json {
+
+    using json = nlohmann::json;
 
     template<typename T, typename Context = void> struct serializer;
 
@@ -44,7 +47,7 @@ namespace json {
         }
 
         template<deserializable<Context> T>
-        auto deserialize_with_context(const Json::Value &value) const {
+        auto deserialize_with_context(const json &value) const {
             if constexpr (requires { deserializer<T, Context>{context}; }) {
                 return deserializer<T, Context>{context}(value);
             } else {
@@ -60,42 +63,49 @@ namespace json {
         }
 
         template<deserializable T>
-        auto deserialize_with_context(const Json::Value &value) const {
+        auto deserialize_with_context(const json &value) const {
             return deserializer<T, void>{}(value);
         }
     };
 
     template<typename T> requires serializable<T>
-    Json::Value serialize(const T &value) {
+    json serialize(const T &value) {
         return serializer<T, void>{}(value);
     }
 
     template<typename T, typename Context> requires serializable<T, Context>
-    Json::Value serialize(const T &value, const Context &context) {
+    json serialize(const T &value, const Context &context) {
         return context_holder<Context>{context}.serialize_with_context(value);
     }
 
     template<typename T> requires deserializable<T>
-    T deserialize(const Json::Value &value) {
+    T deserialize(const json &value) {
         return deserializer<T, void>{}(value);
     }
 
     template<typename T, typename Context> requires deserializable<T, Context>
-    T deserialize(const Json::Value &value, const Context &context) {
+    T deserialize(const json &value, const Context &context) {
         return context_holder<Context>{context}.template deserialize_with_context<T>(value);
     }
 
     template<typename Context>
-    struct serializer<Json::Value, Context> {
-        Json::Value operator()(const Json::Value &value) const {
+    struct serializer<json, Context> {
+        json operator()(const json &value) const {
             return value;
         }
     };
 
-    template<std::convertible_to<Json::Value> T, typename Context>
+    template<typename T, typename Context> requires std::is_arithmetic_v<T>
     struct serializer<T, Context> {
-        Json::Value operator()(const T &value) const {
-            return Json::Value(value);
+        json operator()(const T &value) const {
+            return value;
+        }
+    };
+
+    template<typename Context>
+    struct serializer<std::string, Context> {
+        json operator()(const std::string &value) const {
+            return value;
         }
     };
 
@@ -104,22 +114,22 @@ namespace json {
         using context_holder<Context>::context_holder;
         
         template<size_t I>
-        static void serialize_field(const serializer &self, const T &value, Json::Value &ret) {
+        static void serialize_field(const serializer &self, const T &value, json &ret) {
             const auto field_data = reflector::get_field_data<I>(value);
             const auto &field = field_data.get();
-            Json::Value json_value = self.serialize_with_context(field);
+            json json_value = self.serialize_with_context(field);
             if (!json_value.empty()) {
-                ret[field_data.name()] = std::move(json_value);
+                ret.push_back(json::object_t::value_type(field_data.name(), std::move(json_value)));
             }
         }
 
         template<size_t ... Is>
-        static void serialize_fields(const serializer &self, const T &value, Json::Value &ret, std::index_sequence<Is...>) {
+        static void serialize_fields(const serializer &self, const T &value, json &ret, std::index_sequence<Is...>) {
             (serialize_field<Is>(self, value, ret), ...);
         }
 
-        Json::Value operator()(const T &value) const {
-            Json::Value ret;
+        json operator()(const T &value) const {
+            auto ret = json::object();
             serialize_fields(*this, value, ret, std::make_index_sequence<reflector::num_fields<T>>());
             return ret;
         }
@@ -127,19 +137,19 @@ namespace json {
 
     template<enums::enum_with_names T, typename Context>
     struct serializer<T, Context> {
-        Json::Value operator()(const T &value) const {
+        json operator()(const T &value) const {
             return std::string(enums::to_string(value));
         }
     };
 
     template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
     struct serializer<T, Context> {
-        Json::Value operator()(const T &value) const {
+        json operator()(const T &value) const {
             using namespace enums::flag_operators;
-            Json::Value ret = Json::arrayValue;
+            auto ret = json::array();
             for (T v : enums::enum_values_v<T>) {
                 if (bool(value & v)) {
-                    ret.append(Json::String(enums::value_to_string(v)));
+                    ret.push_back(enums::value_to_string(v));
                 }
             }
             return ret;
@@ -150,10 +160,10 @@ namespace json {
     struct serializer<std::vector<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
-        Json::Value operator()(const std::vector<T> &value) const {
-            Json::Value ret = Json::arrayValue;
+        json operator()(const std::vector<T> &value) const {
+            auto ret = json::array();
             for (const T &obj : value) {
-                ret.append(this->serialize_with_context(obj));
+                ret.push_back(this->serialize_with_context(obj));
             }
             return ret;
         }
@@ -161,21 +171,8 @@ namespace json {
 
     template<typename Context>
     struct serializer<std::vector<std::byte>, Context> {
-        Json::Value operator()(const std::vector<std::byte> &value) const {
+        json operator()(const std::vector<std::byte> &value) const {
             return base64::base64_encode(value);
-        }
-    };
-
-    template<serializable T, typename Context>
-    struct serializer<std::map<std::string, T>, Context> : context_holder<Context> {
-        using context_holder<Context>::context_holder;
-        
-        Json::Value operator()(const std::map<std::string, T> &value) const {
-            Json::Value ret = Json::objectValue;
-            for (const auto &[key, value] : value) {
-                ret[key] = this->serialize_with_context(value);
-            }
-            return ret;
         }
     };
 
@@ -183,13 +180,13 @@ namespace json {
     struct serializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
-        Json::Value operator()(const T &value) const {
+        json operator()(const T &value) const {
             using enum_type = typename T::enum_type;
             return enums::visit_indexed([this]<enum_type E>(enums::enum_tag_t<E>, auto && ... args) {
-                Json::Value ret = Json::objectValue;
-                ret["type"] = serializer<enum_type>{}(E);
+                auto ret = json::object();
+                ret.push_back(json::object_t::value_type("type", serializer<enum_type>{}(E)));
                 if constexpr (sizeof...(args) > 0) {
-                    ret["value"] = this->serialize_with_context(FWD(args) ... );
+                    ret.push_back(json::object_t::value_type("value", this->serialize_with_context(FWD(args) ... )));
                 }
                 return ret;
             }, value);
@@ -200,46 +197,41 @@ namespace json {
     struct serializer<std::variant<Ts ...>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
-        Json::Value operator()(const std::variant<Ts ...> &value) const {
-            Json::Value ret = Json::objectValue;
-            ret["index"] = value.index();
-            ret["value"] = std::visit([this](const auto &value) {
+        json operator()(const std::variant<Ts ...> &value) const {
+            auto ret = json::object();
+            ret.push_back(json::object_t::value_type("index", value.index()));
+            ret.push_back(json::object_t::value_type("value", std::visit([this](const auto &value) {
                 return this->serialize_with_context(value);
-            }, value);
+            }, value)));
             return ret;
         }
     };
 
     template<typename Rep, typename Period, typename Context>
     struct serializer<std::chrono::duration<Rep, Period>, Context> {
-        Json::Value operator()(const std::chrono::duration<Rep, Period> &value) const {
+        json operator()(const std::chrono::duration<Rep, Period> &value) const {
             return value.count();
         }
     };
     
     template<typename Context>
-    struct deserializer<Json::Value, Context> {
-        Json::Value operator()(const Json::Value &value) const {
+    struct deserializer<json, Context> {
+        json operator()(const json &value) const {
             return value;
         }
     };
 
-    template<typename T>
-    concept convertible_from_json_value = requires (const Json::Value &value) {
-        { value.as<T>() } -> std::convertible_to<T>;
-    };
-
-    template<convertible_from_json_value T, typename Context>
+    template<typename T, typename Context> requires std::is_arithmetic_v<T>
     struct deserializer<T, Context> {
-        T operator()(const Json::Value &value) const {
-            return value.as<T>();
+        T operator()(const json &value) const {
+            return value.get<T>();
         }
     };
 
-    template<std::integral T, typename Context> requires (!convertible_from_json_value<T>)
-    struct deserializer<T, Context> {
-        T operator()(const Json::Value &value) const {
-            return value.asInt();
+    template<typename Context>
+    struct deserializer<std::string, Context> {
+        std::string operator()(const json &value) const {
+            return value.get<std::string>();
         }
     };
 
@@ -248,20 +240,20 @@ namespace json {
         using context_holder<Context>::context_holder;
         
         template<size_t I>
-        static void deserialize_field(const deserializer &self, const Json::Value &value, T &out) {
+        static void deserialize_field(const deserializer &self, const json &value, T &out) {
             auto field_data = reflector::get_field_data<I>(out);
             auto &field = field_data.get();
-            if (value.isMember(field_data.name())) {
+            if (value.contains(field_data.name())) {
                 field = self.template deserialize_with_context<std::remove_cvref_t<decltype(field)>>(value[field_data.name()]);
             }
         }
 
         template<size_t ... Is>
-        static void deserialize_fields(const deserializer &self, const Json::Value &value, T &out, std::index_sequence<Is ...>) {
+        static void deserialize_fields(const deserializer &self, const json &value, T &out, std::index_sequence<Is ...>) {
             (deserialize_field<Is>(self, value, out), ...);
         }
 
-        T operator()(const Json::Value &value) const {
+        T operator()(const json &value) const {
             T ret;
             deserialize_fields(*this, value, ret, std::make_index_sequence<reflector::num_fields<T>>());
             return ret;
@@ -270,46 +262,47 @@ namespace json {
 
     template<enums::enum_with_names T, typename Context>
     struct deserializer<T, Context> {
-        T operator()(const Json::Value &value) const {
-            if (value.isString()) {
-                std::string str = value.asString();
+        T operator()(const json &value) const {
+            if (value.is_string()) {
+                auto str = value.get<std::string>();
                 if (auto ret = enums::from_string<T>(str)) {
                     return *ret;
                 } else {
-                    throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
+                    throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
                 }
             } else {
-                throw Json::RuntimeError("Value is not a string");
+                throw std::runtime_error("Value is not a string");
             }
         }
     };
 
     template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
     struct deserializer<T, Context> {
-        T operator()(const Json::Value &value) const {
+        T operator()(const json &value) const {
             using namespace enums::flag_operators;
-            if (value.isArray()) {
+            if (value.is_array()) {
                 T ret{};
                 for (const auto &elem : value) {
-                    if (elem.isString()) {
-                        if (auto v = enums::value_from_string<T>(elem.asString())) {
+                    if (elem.is_string()) {
+                        if (auto v = enums::value_from_string<T>(elem.get<std::string>())) {
                             ret |= *v;
                         } else {
-                            throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.asString()));
+                            throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.get<std::string>()));
                         }
                     } else {
-                        throw Json::RuntimeError("Elem is not a string");
+                        throw std::runtime_error("Elem is not a string");
                     }
                 }
                 return ret;
-            } else if (value.isString()) {
-                if (auto ret = enums::from_string<T>(value.asString())) {
+            } else if (value.is_string()) {
+                auto str = value.get<std::string>();
+                if (auto ret = enums::from_string<T>(str)) {
                     return *ret;
                 } else {
-                    throw Json::RuntimeError(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, value.asString()));
+                    throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
                 }
             } else {
-                throw Json::RuntimeError("Invalid type for value");
+                throw std::runtime_error("Invalid type for value");
             }
         }
     };
@@ -318,7 +311,7 @@ namespace json {
     struct deserializer<std::vector<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
-        std::vector<T> operator()(const Json::Value &value) const {
+        std::vector<T> operator()(const json &value) const {
             std::vector<T> ret;
             for (const auto &obj : value) {
                 ret.push_back(this->template deserialize_with_context<T>(obj));
@@ -329,25 +322,12 @@ namespace json {
 
     template<typename Context>
     struct deserializer<std::vector<std::byte>, Context> {
-        std::vector<std::byte> operator()(const Json::Value &value) const {
-            if (value.isString()) {
-                return base64::base64_decode(value.asString());
+        std::vector<std::byte> operator()(const json &value) const {
+            if (value.is_string()) {
+                return base64::base64_decode(value.get<std::string>());
             } else {
-                throw Json::RuntimeError("Value is not a string");
+                throw std::runtime_error("Value is not a string");
             }
-        }
-    };
-
-    template<deserializable T, typename Context>
-    struct deserializer<std::map<std::string, T>, Context> : context_holder<Context> {
-        using context_holder<Context>::context_holder;
-        
-        T operator()(const Json::Value &value) const {
-            std::map<std::string, T> ret;
-            for (auto it=value.begin(); it!=value.end(); ++it) {
-                ret.emplace(it.key(), this->template deserialize_with_context<T>(*it));
-            }
-            return ret;
         }
     };
 
@@ -355,18 +335,19 @@ namespace json {
     struct deserializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
-        T operator()(const Json::Value &value) const {
-            if (!value.isMember("type")) {
-                throw Json::RuntimeError("Missing field 'type' in enums::enum_variant");
+        T operator()(const json &value) const {
+            if (!value.contains("type")) {
+                throw std::runtime_error("Missing field 'type' in enums::enum_variant");
             }
             using enum_type = typename T::enum_type;
             enum_type variant_type = this->template deserialize_with_context<enum_type>(value["type"]);
             return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
                 if constexpr (T::template has_type<E>) {
-                    return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(value["value"]));
-                } else {
-                    return T(tag);
+                    if (value.contains("value")) {
+                        return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(value["value"]));
+                    }
                 }
+                return T(tag);
             }, variant_type);
         }
     };
@@ -377,24 +358,29 @@ namespace json {
         using variant_type = std::variant<Ts ...>;
 
         template<typename T>
-        static variant_type deserialize_alternative(const deserializer &self, const Json::Value &value) {
+        static variant_type deserialize_alternative(const deserializer &self, const json &value) {
             return self.template deserialize_with_context<T>(value);
         }
 
-        variant_type operator()(const Json::Value &value) const {
-            if (!value.isMember("index")) {
-                throw Json::RuntimeError("Missing field 'index' in std::variant");
+        variant_type operator()(const json &value) const {
+            if (!value.contains("index")) {
+                throw std::runtime_error("Missing field 'index' in std::variant");
             }
 
             static constexpr auto vtable = std::array { deserialize_alternative<Ts> ... };
-            return vtable[value["index"].asInt()](*this, value["value"]);
+            auto fun = vtable[value["index"].get<int>()];
+            if (value.contains("value")) {
+                return fun(*this, value["value"]);
+            } else {
+                return fun(*this, json{});
+            }
         }
     };
 
     template<typename Rep, typename Period, typename Context>
     struct deserializer<std::chrono::duration<Rep, Period>, Context> {
-        std::chrono::duration<Rep, Period> operator()(const Json::Value &value) const {
-            return std::chrono::duration<Rep, Period>{value.as<Rep>()};
+        std::chrono::duration<Rep, Period> operator()(const json &value) const {
+            return std::chrono::duration<Rep, Period>{value.get<Rep>()};
         }
     };
 }
