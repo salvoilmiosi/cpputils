@@ -13,19 +13,6 @@
 #include <bit>
 
 namespace enums {
-    namespace detail {
-        template<size_t S, typename ... Ts> struct sized_int {};
-        template<size_t S, typename ... Ts> using sized_int_t = typename sized_int<S, Ts ...>::type;
-
-        template<size_t S, typename T> constexpr bool fits_in_v = S <= std::numeric_limits<T>::max();
-
-        template<size_t S, typename T> struct sized_int<S, T>
-            : std::enable_if<fits_in_v<S, T>, T> {};
-        template<size_t S, typename First, typename ... Ts> struct sized_int<S, First, Ts...>
-            : std::conditional<fits_in_v<S, First>, First, sized_int_t<S, Ts...>> {};
-    }
-
-    template<size_t S> using sized_int_t = detail::sized_int_t<S, uint8_t, uint16_t, uint32_t, uint64_t>;
 
     template<typename T> concept enumeral = requires {
         typename std::underlying_type<T>::type;
@@ -410,8 +397,6 @@ namespace enums {
 #define CREATE_ENUM_ELEMENT_MAX_VALUE(n) n - 1
 #define CREATE_FLAG_ELEMENT_MAX_VALUE(n) 1 << (n - 1)
 
-#define ENUM_INT(enum_value_fun, elementTupleSeq) enums::sized_int_t<enum_value_fun##_MAX_VALUE(BOOST_PP_SEQ_SIZE(elementTupleSeq))>
-
 #define ENUM_DATA_FUNCTIONS(enumName, elementTuple) \
     static constexpr auto get_data(enums::enum_tag_t<enumName::ENUM_ELEMENT_NAME(elementTuple)>) { \
         return ENUM_TUPLE_TAIL(elementTuple); \
@@ -428,7 +413,7 @@ namespace enums {
 #define REFLECTOR_NAME(enumName) __##enumName##_reflector
 
 #define IMPL_DEFINE_ENUM(enumName, elementTupleSeq, enum_value_fun, value_fun_name) \
-enum class enumName : ENUM_INT(enum_value_fun, elementTupleSeq) { \
+enum class enumName { \
     BOOST_PP_SEQ_ENUM(BOOST_PP_SEQ_FOR_EACH_I(enum_value_fun, enumName, elementTupleSeq)) \
 }; \
 struct REFLECTOR_NAME(enumName) { \
