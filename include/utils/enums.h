@@ -3,6 +3,7 @@
 
 #include <boost/preprocessor.hpp>
 
+#include <functional>
 #include <algorithm>
 #include <optional>
 #include <string>
