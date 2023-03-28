@@ -182,13 +182,15 @@ namespace json {
         
         json operator()(const T &value) const {
             using enum_type = typename T::enum_type;
-            return enums::visit_indexed([this]<enum_type E>(enums::enum_tag_t<E>, auto && ... args) {
-                auto ret = json::object();
-                ret.push_back(json::object_t::value_type("type", serializer<enum_type>{}(E)));
+            return enums::visit_indexed([this]<enum_type E>(enums::enum_tag_t<E>, auto && ... args) -> json {
+                std::string key{enums::to_string(E)};
                 if constexpr (sizeof...(args) > 0) {
-                    ret.push_back(json::object_t::value_type("value", this->serialize_with_context(FWD(args) ... )));
+                    return json::object({
+                        {key, this->serialize_with_context(FWD(args) ... )}
+                    });
+                } else {
+                    return key;
                 }
-                return ret;
             }, value);
         }
     };
@@ -334,17 +336,41 @@ namespace json {
     template<enums::is_enum_variant T, typename Context>
     struct deserializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
+
+        using enum_type = typename T::enum_type;
+
+        static inline const json null_value;
+
+        std::pair<enum_type, const json &> get_key_value_pair(const json &value) const {
+            if (value.is_string()) {
+                const auto &str = value.get<std::string>();
+                auto variant_type = enums::from_string<enum_type>(str);
+                if (!variant_type) {
+                    throw std::runtime_error(fmt::format("Invalid variant type: {}", str));
+                }
+                return {*variant_type, null_value};
+            } else if (value.is_object()) {
+                if (value.size() != 1) {
+                    throw std::runtime_error("Missing type key in enums::enum_variant");
+                }
+                auto it = value.begin();
+                const auto &str = it.key();
+                auto variant_type = enums::from_string<enum_type>(str);
+                if (!variant_type) {
+                    throw std::runtime_error(fmt::format("Invalid variant type: {}", str));
+                }
+                return {*variant_type, it.value()};
+            } else {
+                throw std::runtime_error(fmt::format("Invalid type"));
+            }
+        }
         
         T operator()(const json &value) const {
-            if (!value.contains("type")) {
-                throw std::runtime_error("Missing field 'type' in enums::enum_variant");
-            }
-            using enum_type = typename T::enum_type;
-            enum_type variant_type = this->template deserialize_with_context<enum_type>(value["type"]);
+            auto [variant_type, inner_value] = get_key_value_pair(value);
             return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
                 if constexpr (T::template has_type<E>) {
-                    if (value.contains("value")) {
-                        return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(value["value"]));
+                    if (!inner_value.empty()) {
+                        return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(inner_value));
                     }
                 }
                 return T(tag);
