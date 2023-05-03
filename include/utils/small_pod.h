@@ -13,28 +13,14 @@ class basic_small_string {
 private:
     std::array<char, MaxSize> m_str{};
 
-    constexpr void init(std::string_view str) {
-        std::memcpy(m_str.data(), str.data(), str.size());
-    }
-
 public:
     constexpr basic_small_string() = default;
-
-    constexpr basic_small_string(std::string_view str) {
-        if (str.size() > MaxSize) {
-            throw std::runtime_error("String is too large");
-        }
-        init(str);
-    }
 
     template<size_t N>
     constexpr basic_small_string(const char (&str)[N]) {
         static_assert(N - 1 <= MaxSize, "String is too large");
-        init(std::string_view(std::begin(str), std::end(str)-1));
+        std::memcpy(m_str.data(), str, N-1);
     }
-
-    constexpr basic_small_string(std::same_as<const char *> auto str)
-        : basic_small_string(std::string_view(str)) {}
 
     constexpr bool empty() const {
         return m_str.front() == '\0';
@@ -60,13 +46,6 @@ namespace json {
     struct serializer<basic_small_string<MaxSize>, Context> {
         json operator()(const basic_small_string<MaxSize> &value) const {
             return std::string(std::string_view(value));
-        }
-    };
-
-    template<size_t MaxSize, typename Context>
-    struct deserializer<basic_small_string<MaxSize>, Context> {
-        basic_small_string<MaxSize> operator()(const json &value) const {
-            return basic_small_string<MaxSize>(value.get<std::string>());
         }
     };
 }
