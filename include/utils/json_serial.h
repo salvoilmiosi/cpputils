@@ -142,6 +142,7 @@ namespace json {
         }
     };
 
+#ifdef JSON_ENUM_FLAGS_AS_ARRAY
     template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
     struct serializer<T, Context> {
         json operator()(const T &value) const {
@@ -155,6 +156,7 @@ namespace json {
             return ret;
         }
     };
+#endif
 
     template<serializable T, typename Context>
     struct serializer<std::vector<T>, Context> : context_holder<Context> {
@@ -162,6 +164,7 @@ namespace json {
         
         json operator()(const std::vector<T> &value) const {
             auto ret = json::array();
+            ret.get_ptr<json::array_t*>()->reserve(value.size());
             for (const T &obj : value) {
                 ret.push_back(this->serialize_with_context(obj));
             }
@@ -189,7 +192,9 @@ namespace json {
                         {key, this->serialize_with_context(FWD(args) ... )}
                     });
                 } else {
-                    return key;
+                    return json::object({
+                        {key, json::object()}
+                    });
                 }
             }, value);
         }
@@ -315,6 +320,7 @@ namespace json {
         
         std::vector<T> operator()(const json &value) const {
             std::vector<T> ret;
+            ret.reserve(value.size());
             for (const auto &obj : value) {
                 ret.push_back(this->template deserialize_with_context<T>(obj));
             }
@@ -338,43 +344,25 @@ namespace json {
         using context_holder<Context>::context_holder;
 
         using enum_type = typename T::enum_type;
-
-        static inline const json null_value;
-
-        std::pair<enum_type, const json &> get_key_value_pair(const json &value) const {
-            if (value.is_string()) {
-                const auto &str = value.get<std::string>();
-                auto variant_type = enums::from_string<enum_type>(str);
-                if (!variant_type) {
-                    throw std::runtime_error(fmt::format("Invalid variant type: {}", str));
-                }
-                return {*variant_type, null_value};
-            } else if (value.is_object()) {
-                if (value.size() != 1) {
-                    throw std::runtime_error("Missing type key in enums::enum_variant");
-                }
-                auto it = value.begin();
-                const auto &str = it.key();
-                auto variant_type = enums::from_string<enum_type>(str);
-                if (!variant_type) {
-                    throw std::runtime_error(fmt::format("Invalid variant type: {}", str));
-                }
-                return {*variant_type, it.value()};
-            } else {
-                throw std::runtime_error(fmt::format("Invalid type"));
-            }
-        }
         
         T operator()(const json &value) const {
-            auto [variant_type, inner_value] = get_key_value_pair(value);
-            return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
-                if constexpr (T::template has_type<E>) {
-                    if (!inner_value.empty()) {
-                        return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(inner_value));
+            if (value.size() != 1) {
+                throw std::runtime_error("Missing type key in enums::enum_variant");
+            }
+            auto it = value.begin();
+            if (auto variant_type = enums::from_string<enum_type>(it.key())) {
+                const json &inner_value = it.value();
+                return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
+                    if constexpr (T::template has_type<E>) {
+                        if (!inner_value.empty()) {
+                            return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(inner_value));
+                        }
                     }
-                }
-                return T(tag);
-            }, variant_type);
+                    return T(tag);
+                }, *variant_type);
+            } else {
+                throw std::runtime_error(fmt::format("Invalid variant type: {}", it.key()));
+            }
         }
     };
 
