@@ -2,7 +2,9 @@
 #define __SMALL_POD_H__
 
 #include <array>
-#include <vector>
+#include <string>
+#include <cstring>
+#include <stdexcept>
 
 #include "json_serial.h"
 
@@ -12,11 +14,7 @@ private:
     std::array<char, MaxSize> m_str{};
 
     constexpr void init(std::string_view str) {
-        const char *src = str.data();
-        char *dst = m_str.data();
-        while (dst != m_str.data() + m_str.size() && src != str.data() + str.size() && *src) {
-            *dst++ = *src++;
-        }
+        std::memcpy(m_str.data(), str.data(), str.size());
     }
 
 public:
@@ -32,7 +30,7 @@ public:
     template<size_t N>
     constexpr basic_small_string(const char (&str)[N]) {
         static_assert(N - 1 <= MaxSize, "String is too large");
-        init(std::string_view(std::begin(str), std::end(str)));
+        init(std::string_view(std::begin(str), std::end(str)-1));
     }
 
     constexpr basic_small_string(std::same_as<const char *> auto str)
