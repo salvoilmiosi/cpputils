@@ -3,8 +3,7 @@
 
 #include <array>
 #include <string>
-#include <cstring>
-#include <stdexcept>
+#include <algorithm>
 
 #include "json_serial.h"
 
@@ -19,7 +18,7 @@ public:
     template<size_t N>
     constexpr basic_small_string(const char (&str)[N]) {
         static_assert(N - 1 <= MaxSize, "String is too large");
-        std::memcpy(m_str.data(), str, N-1);
+        std::copy(std::begin(str), std::end(str) - 1, std::begin(m_str));
     }
 
     constexpr bool empty() const {
@@ -27,11 +26,7 @@ public:
     }
 
     constexpr size_t size() const {
-        const char *ptr = m_str.data();
-        while (ptr != m_str.data() + MaxSize && *ptr) {
-            ++ptr;
-        }
-        return ptr - m_str.data();
+        return std::ranges::find(m_str, '\0') - std::begin(m_str);
     }
 
     constexpr operator std::string_view() const {
@@ -99,22 +94,6 @@ namespace json {
             auto ret = json::array();
             for (const T &obj : value) {
                 ret.push_back(this->serialize_with_context(obj));
-            }
-            return ret;
-        }
-    };
-
-    template<typename T, size_t MaxSize, typename Context>
-    struct deserializer<small_vector<T, MaxSize>, Context> : context_holder<Context> {
-        using context_holder<Context>::context_holder;
-        
-        small_vector<T, MaxSize> operator()(const json &value) const {
-            if (value.size() > MaxSize) {
-                throw std::runtime_error("Vector is too big");
-            }
-            small_vector<T, MaxSize> ret;
-            for (const auto &obj : value) {
-                ret.push_back(this->template deserialize_with_context<T>(obj));
             }
             return ret;
         }
