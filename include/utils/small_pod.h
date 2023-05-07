@@ -10,23 +10,26 @@
 template<size_t MaxSize>
 class basic_small_string {
 private:
-    std::array<char, MaxSize> m_str{};
+    std::array<char, MaxSize> m_str;
+    size_t m_size = 0;
 
 public:
     constexpr basic_small_string() = default;
 
     template<size_t N>
-    constexpr basic_small_string(const char (&str)[N]) {
+    constexpr basic_small_string(const char (&str)[N])
+        : m_size{N - 1}
+    {
         static_assert(N - 1 <= MaxSize, "String is too large");
-        std::copy(std::begin(str), std::end(str) - 1, std::begin(m_str));
+        std::copy(str, str + m_size, m_str.begin());
     }
 
     constexpr bool empty() const {
-        return m_str.front() == '\0';
+        return m_size == 0;
     }
 
     constexpr size_t size() const {
-        return std::ranges::find(m_str, '\0') - std::begin(m_str);
+        return m_size;
     }
 
     constexpr operator std::string_view() const {
