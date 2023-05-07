@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <cstdint>
 #include <span>
 
 // https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
