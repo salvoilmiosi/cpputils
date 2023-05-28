@@ -118,9 +118,10 @@ namespace json {
             const auto field_data = reflector::get_field_data<I>(value);
             const auto &field = field_data.get();
             json json_value = self.serialize_with_context(field);
-            if (!json_value.empty()) {
-                ret.push_back(json::object_t::value_type(field_data.name(), std::move(json_value)));
-            }
+#ifdef JSON_REMOVE_EMPTY_OBJECTS
+            if (json_value.empty()) return;
+#endif
+            ret.push_back(json::object_t::value_type(field_data.name(), std::move(json_value)));
         }
 
         template<size_t ... Is>
@@ -142,7 +143,7 @@ namespace json {
         }
     };
 
-#ifdef JSON_ENUM_FLAGS_AS_ARRAY
+#ifndef JSON_FLATTEN_ENUM_FLAGS
     template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
     struct serializer<T, Context> {
         json operator()(const T &value) const {
@@ -354,9 +355,10 @@ namespace json {
                 const json &inner_value = it.value();
                 return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
                     if constexpr (T::template has_type<E>) {
-                        if (!inner_value.empty()) {
-                            return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(inner_value));
-                        }
+#ifdef JSON_REMOVE_EMPTY_OBJECTS
+                        if (inner_value.empty()) return T(tag);
+#endif
+                        return T(tag, this->template deserialize_with_context<typename T::template value_type<E>>(inner_value));
                     }
                     return T(tag);
                 }, *variant_type);
