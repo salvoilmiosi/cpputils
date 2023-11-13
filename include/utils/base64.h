@@ -106,6 +106,18 @@ inline std::vector<std::byte> base64_decode(std::string_view encoded_string) {
   return ret;
 }
 
+struct encoded_bytes {
+  std::vector<std::byte> bytes;
+
+  encoded_bytes() = default;
+  encoded_bytes(std::string_view str)
+    : bytes(base64_decode(str)) {}
+  
+  std::string to_string() const {
+    return base64_encode(bytes);
+  }
+};
+
 }
 
 #endif

@@ -174,9 +174,9 @@ namespace json {
     };
 
     template<typename Context>
-    struct serializer<std::vector<std::byte>, Context> {
-        json operator()(const std::vector<std::byte> &value) const {
-            return base64::base64_encode(value);
+    struct serializer<base64::encoded_bytes, Context> {
+        json operator()(const base64::encoded_bytes &value) const {
+            return value.to_string();
         }
     };
 
@@ -330,10 +330,10 @@ namespace json {
     };
 
     template<typename Context>
-    struct deserializer<std::vector<std::byte>, Context> {
-        std::vector<std::byte> operator()(const json &value) const {
+    struct deserializer<base64::encoded_bytes, Context> {
+        base64::encoded_bytes operator()(const json &value) const {
             if (value.is_string()) {
-                return base64::base64_decode(value.get<std::string>());
+                return base64::encoded_bytes(value.get<std::string>());
             } else {
                 throw std::runtime_error("Value is not a string");
             }
