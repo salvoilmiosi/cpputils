@@ -221,6 +221,19 @@ namespace json {
             return value.count();
         }
     };
+
+    template<typename T, typename Context>
+    struct serializer<std::optional<T>, Context> : context_holder<Context> {
+        using context_holder<Context>::context_holder;
+
+        json operator()(const std::optional<T> &value) const {
+            if (value) {
+                return this->serialize_with_context(*value);
+            } else {
+                return json{};
+            }
+        }
+    };
     
     template<typename Context>
     struct deserializer<json, Context> {
@@ -397,6 +410,19 @@ namespace json {
     struct deserializer<std::chrono::duration<Rep, Period>, Context> {
         std::chrono::duration<Rep, Period> operator()(const json &value) const {
             return std::chrono::duration<Rep, Period>{value.get<Rep>()};
+        }
+    };
+
+    template<typename T, typename Context>
+    struct deserializer<std::optional<T>, Context> : context_holder<Context> {
+        using context_holder<Context>::context_holder;
+
+        std::optional<T> operator()(const json &value) const {
+            if (value.is_null()) {
+                return std::nullopt;
+            } else {
+                return this->template deserialize_with_context<T>(value);
+            }
         }
     };
 }
