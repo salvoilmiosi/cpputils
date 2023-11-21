@@ -42,65 +42,12 @@ namespace util {
             iterator_set set;
         };
 
-        template<std::invocable Function, typename T>
-        class on_destroy_do : public T {
-        private:
-            Function m_fun;
-        
-        public:
-            on_destroy_do(Function &&fun, T &&value)
-                : T{std::move(value)}
-                , m_fun(fun) {}
-
-            on_destroy_do(const on_destroy_do &) = delete;
-            on_destroy_do(on_destroy_do &&other)
-                noexcept(std::is_nothrow_move_constructible_v<T>
-                    && std::is_nothrow_move_constructible_v<Function>)
-                : T{std::move(other)}
-                , m_fun{std::move(other.m_fun)} {}
-
-            on_destroy_do &operator = (const on_destroy_do &) = delete;
-            on_destroy_do &operator = (on_destroy_do &&other)
-                noexcept(std::is_nothrow_move_assignable_v<T>
-                    && std::is_nothrow_move_assignable_v<Function>)
-            {
-                static_cast<T &>(*this) = std::move(other);
-                std::swap(m_fun, other.m_fun);
-                return *this;
-            }
-
-            ~on_destroy_do() {
-                std::invoke(m_fun);
-            }
-        };
-
         using iterator_table = std::array<set_lock_pair, enums::num_members_v<EnumType>>;
         using iterator_vector = std::vector<container_iterator>;
 
         container_map m_map;
         iterator_table m_table;
         iterator_vector m_changes;
-
-    public:
-        template<EnumType E, typename ... Ts>
-        void add(Key key, Ts && ... args) {
-            auto it = m_map.emplace(std::piecewise_construct,
-                std::make_tuple(std::move(key)),
-                std::make_tuple(enums::enum_tag<E>, FWD(args) ...));
-            m_table[enums::indexof(E)].set.emplace(it);
-            m_changes.push_back(it);
-        }
-
-        template<typename T>
-        void erase(const T &key) {
-            auto [low, high] = m_map.equal_range(key);
-            for (; low != high; ++low) {
-                if (low->second.status != erased) {
-                    low->second.status = erased;
-                    m_changes.push_back(low);
-                }
-            }
-        }
 
         void commit_changes() {
             for (auto it = m_changes.begin(); it != m_changes.end();) {
@@ -122,19 +69,70 @@ namespace util {
             }
         }
 
+    public:
+        template<EnumType E, typename ... Ts>
+        void add(Key key, Ts && ... args) {
+            auto it = m_map.emplace(std::piecewise_construct,
+                std::make_tuple(std::move(key)),
+                std::make_tuple(enums::enum_tag<E>, FWD(args) ...));
+            m_table[enums::indexof(E)].set.emplace(it);
+            m_changes.push_back(it);
+            commit_changes();
+        }
+
+        template<typename T>
+        void erase(const T &key) {
+            auto [low, high] = m_map.equal_range(key);
+            for (; low != high; ++low) {
+                if (low->second.status != erased) {
+                    low->second.status = erased;
+                    m_changes.push_back(low);
+                }
+            }
+            commit_changes();
+        }
+
         template<EnumType E>
-        auto get_table() {
-            auto &set = m_table[enums::indexof(E)];
-            ++set.lock_count;
-            return on_destroy_do([&]{
-                --set.lock_count;
-            }, set.set
-                | std::views::filter([](container_iterator it) {
-                    return it->second.status == active;
-                })
-                | std::views::transform([](container_iterator it) -> decltype(auto) {
-                    return it->second.value.template get<E>();
-                }));
+        class table_lock {
+        private:
+            priority_double_map *parent;
+
+            set_lock_pair &get_table() const {
+                return parent->m_table[enums::indexof(E)];
+            }
+
+        public:
+            table_lock(priority_double_map *parent) : parent{parent} {
+                ++get_table().lock_count;
+            }
+
+            table_lock(const table_lock &other) = delete;
+            table_lock(table_lock &&other) noexcept : parent{std::exchange(other.parent, nullptr)} {}
+
+            table_lock &operator = (const table_lock &other) = delete;
+            table_lock &operator = (table_lock &&other) noexcept { std::swap(parent, other.parent); return *this; }
+
+            ~table_lock() {
+                if (parent) {
+                    --get_table().lock_count;
+                    parent->commit_changes();
+                }
+            }
+
+            auto values() const {
+                return get_table().set 
+                    | std::views::filter([](container_iterator it) {
+                        return it->second.status == active;
+                    })
+                    | std::views::transform([](container_iterator it) -> decltype(auto) {
+                        return it->second.value.template get<E>();
+                    });
+            }
+        };
+
+        template<EnumType E>
+        auto lock_table() {
+            return table_lock<E>(this);
         }
     };
 
