@@ -19,9 +19,3 @@ target_link_libraries(cpputils INTERFACE boost_preprocessor)
 
 add_subdirectory(external/json)
 target_link_libraries(cpputils INTERFACE nlohmann_json::nlohmann_json)
-
-add_library(asio INTERFACE)
-target_include_directories(asio INTERFACE external/asio/asio/include)
-if(MINGW)
-    target_link_libraries(asio INTERFACE wsock32 ws2_32)
-endif()
