@@ -11,6 +11,10 @@ else()
     target_link_libraries(cpputils INTERFACE fmt::fmt)
 endif()
 
+if(MSVC)
+    target_compile_definitions(cpputils INTERFACE _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+endif()
+
 find_package(range-v3 REQUIRED)
 target_link_libraries(cpputils INTERFACE range-v3)
 
