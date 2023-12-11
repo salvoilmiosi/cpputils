@@ -13,7 +13,7 @@
 #define HELPER2_END
 #define ADD_PARENTHESES(sequence) BOOST_PP_CAT(HELPER1 sequence,_END)
 
-#define REFLECT_DECLARE_FIELD_IMPL(type, name, ...) type name{__VA_ARGS__};
+#define REFLECT_DECLARE_FIELD_IMPL(type, name, ...) type name{__VA_ARGS__}
 #define REFLECT_DECLARE_FIELD(tuple) REFLECT_DECLARE_FIELD_IMPL tuple
 
 #define ARGTYPE(tuple) BOOST_PP_TUPLE_ELEM(0, tuple)

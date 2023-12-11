@@ -49,4 +49,17 @@ template<typename T> using same_if_trivial_t = typename same_if_trivial<T>::type
 template<typename T> requires (std::is_trivially_copyable_v<T>)
 struct same_if_trivial<T> { using type = T; };
 
+template<typename T>
+class nullable_ref {
+private:
+    T *m_ptr = nullptr;
+
+public:
+    nullable_ref() = default;
+    nullable_ref(T &value): m_ptr{&value} {}
+
+    operator T &() const { return *m_ptr; }
+    operator const T &() const { return *m_ptr; }
+};
+
 #endif
