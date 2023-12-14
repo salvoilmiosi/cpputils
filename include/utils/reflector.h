@@ -142,6 +142,35 @@ namespace reflector {
         using self_type = typename field_data::self_type;
         return typename self_type::reflector_field_data<field_data::index, std::add_const_t<self_type>>(x);
     }
+
+    namespace detail {
+        template<reflectable T, size_t ... Is>
+        auto as_tuple_helper(const T &value, std::index_sequence<Is...>) {
+            return std::tie(get_field_data<Is, T>(value).get() ...);
+        }
+
+        template<reflectable T, size_t ... Is>
+        auto as_ref_tuple_helper(const T &value, std::index_sequence<Is...>) {
+            return std::tuple{ get_field_data<Is, T>(value).get() ... };
+        }
+    }
+
+    template<reflectable T>
+    auto as_tuple(const T &value) {
+        return detail::as_tuple_helper(value, std::make_index_sequence<num_fields<T>>());
+    }
+
+    template<typename T>
+    using as_tuple_t = decltype(as_tuple(std::declval<const T &>()));
+
+    template<reflectable T>
+    auto as_ref_tuple(const T &value) {
+        return detail::as_ref_tuple_helper(value, std::make_index_sequence<num_fields<T>>());
+    }
+
+    template<typename T>
+    using as_ref_tuple_t = decltype(as_ref_tuple(std::declval<const T &>()));
+    
 }
 
 
