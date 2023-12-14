@@ -143,33 +143,44 @@ namespace reflector {
         return typename self_type::reflector_field_data<field_data::index, std::add_const_t<self_type>>(x);
     }
 
-    namespace detail {
-        template<reflectable T, size_t ... Is>
-        auto as_tuple_helper(const T &value, std::index_sequence<Is...>) {
+    template<typename T>
+    struct to_tuple_converter;
+
+    template<reflectable T>
+    struct to_tuple_converter<T> {
+        template<std::convertible_to<T> U, size_t ... Is>
+        auto to_tuple_helper(U &&value, std::index_sequence<Is...>) const {
             return std::tie(get_field_data<Is, T>(value).get() ...);
         }
 
-        template<reflectable T, size_t ... Is>
-        auto as_ref_tuple_helper(const T &value, std::index_sequence<Is...>) {
-            return std::tuple{ get_field_data<Is, T>(value).get() ... };
+        template<std::convertible_to<T> U>
+        auto operator()(U &&value) const {
+            return to_tuple_helper(value, std::make_index_sequence<num_fields<T>>());
         }
-    }
-
-    template<reflectable T>
-    auto as_tuple(const T &value) {
-        return detail::as_tuple_helper(value, std::make_index_sequence<num_fields<T>>());
-    }
+    };
 
     template<typename T>
-    using as_tuple_t = decltype(as_tuple(std::declval<const T &>()));
-
-    template<reflectable T>
-    auto as_ref_tuple(const T &value) {
-        return detail::as_ref_tuple_helper(value, std::make_index_sequence<num_fields<T>>());
-    }
+    using to_tuple_converter_decay = to_tuple_converter<std::decay_t<T>>;
 
     template<typename T>
-    using as_ref_tuple_t = decltype(as_ref_tuple(std::declval<const T &>()));
+    concept is_tuple = requires {
+        { std::tuple_size<T>::value } -> std::convertible_to<size_t>;
+    };
+
+    template<typename T>
+    concept convertible_to_tuple = requires {
+        typename to_tuple_converter_decay<T>;
+        requires std::invocable<to_tuple_converter_decay<T>, T>;
+        requires is_tuple<std::invoke_result_t<to_tuple_converter_decay<T>, T>>;
+    };
+
+    template<convertible_to_tuple T>
+    auto as_tuple(T &&value) {
+        return to_tuple_converter_decay<T>{}(std::forward<T>(value));
+    }
+
+    template<convertible_to_tuple T>
+    using as_tuple_t = std::invoke_result_t<to_tuple_converter_decay<T>, T>;
     
 }
 
