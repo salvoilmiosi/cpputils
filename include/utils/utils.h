@@ -5,6 +5,18 @@
 #include <ranges>
 #include <range/v3/all.hpp>
 
+#ifdef USE_STD_RANGES
+
+namespace rn = std::ranges;
+namespace rv = std::views;
+
+#else
+
+namespace rn = ranges;
+namespace rv = ranges::views;
+
+#endif
+
 template<typename T> class not_null;
 template<typename T> class not_null<T *> {
 public:
