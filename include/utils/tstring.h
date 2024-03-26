@@ -15,7 +15,7 @@ namespace utils {
         }
 
         consteval operator std::string_view() const {
-            return std::string_view{m_data, m_data+N};
+            return std::string_view{m_data, m_data + N - 1};
         }
     };
 
