@@ -139,9 +139,16 @@ public:
     constexpr bool operator == (const small_int_set_iterator &other) const = default;
 };
 
+struct small_int_set_sized_tag_t {};
+
+static constexpr small_int_set_sized_tag_t small_int_set_sized_tag;
+
 class small_int_set {
 private:
     uint8_t m_value{};
+
+    constexpr small_int_set(uint8_t value)
+        : m_value{m_value} {}
 
 public:
     constexpr small_int_set(std::initializer_list<int> values) {
@@ -157,6 +164,9 @@ public:
             prev = value;
         }
     }
+
+    constexpr small_int_set(small_int_set_sized_tag_t, size_t size)
+        : m_value{static_cast<uint8_t>(size == 0 ? 0 : (1 << size) - 1)} {}
 
     constexpr auto begin() const {
         return small_int_set_iterator{m_value, static_cast<uint8_t>(std::countr_zero(m_value))};
