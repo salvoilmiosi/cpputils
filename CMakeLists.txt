@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.6.0)
 project(cpputils VERSION 0.1.0)
 
 add_library(cpputils INTERFACE)
-target_include_directories(cpputils INTERFACE include)
+set_property(TARGET cpputils PROPERTY CXX_STANDARD 20)
+set_property(TARGET cpputils PROPERTY CXX_STANDARD_REQUIRED ON)
+
+target_include_directories(cpputils INTERFACE include external/reflect)
 
 find_package(fmt REQUIRED)
 if(TARGET fmt::fmt-header-only)

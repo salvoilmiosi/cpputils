@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <fmt/format.h>
+#include <reflect>
 #include <vector>
 #include <string>
 #include <chrono>
@@ -106,6 +107,32 @@ namespace json {
     struct serializer<std::string, Context> {
         json operator()(const std::string &value) const {
             return value;
+        }
+    };
+
+    template<typename T, typename Context> requires (std::is_aggregate_v<T> && !reflector::reflectable<T>)
+    struct serializer<T, Context> : context_holder<Context> {
+        using context_holder<Context>::context_holder;
+        
+        template<size_t I>
+        static void serialize_field(const serializer &self, const T &value, json &ret) {
+            const auto &field = reflect::get<I>(value);
+            json json_value = self.serialize_with_context(field);
+#ifdef JSON_REMOVE_EMPTY_OBJECTS
+            if (json_value.empty()) return;
+#endif
+            ret.push_back(json::object_t::value_type(reflect::member_name<I>(value), std::move(json_value)));
+        }
+
+        template<size_t ... Is>
+        static void serialize_fields(const serializer &self, const T &value, json &ret, std::index_sequence<Is...>) {
+            (serialize_field<Is>(self, value, ret), ...);
+        }
+
+        json operator()(const T &value) const {
+            auto ret = json::object();
+            serialize_fields(*this, value, ret, std::make_index_sequence<reflect::size<T>()>());
+            return ret;
         }
     };
 
@@ -253,6 +280,31 @@ namespace json {
     struct deserializer<std::string, Context> {
         std::string operator()(const json &value) const {
             return value.get<std::string>();
+        }
+    };
+
+    template<typename T, typename Context> requires (std::is_aggregate_v<T> && !reflector::reflectable<T> && std::is_default_constructible_v<T>)
+    struct deserializer<T, Context> : context_holder<Context> {
+        using context_holder<Context>::context_holder;
+        
+        template<size_t I>
+        static void deserialize_field(const deserializer &self, const json &value, T &out) {
+            auto name = reflect::member_name<I, T>();
+            auto &field = reflect::get<I>(out);
+            if (value.contains(name)) {
+                field = self.template deserialize_with_context<std::remove_cvref_t<decltype(field)>>(value[name]);
+            }
+        }
+
+        template<size_t ... Is>
+        static void deserialize_fields(const deserializer &self, const json &value, T &out, std::index_sequence<Is ...>) {
+            (deserialize_field<Is>(self, value, out), ...);
+        }
+
+        T operator()(const json &value) const {
+            T ret;
+            deserialize_fields(*this, value, ret, std::make_index_sequence<reflect::size<T>()>());
+            return ret;
         }
     };
 
