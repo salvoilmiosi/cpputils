@@ -5,7 +5,7 @@ add_library(cpputils INTERFACE)
 set_property(TARGET cpputils PROPERTY CXX_STANDARD 20)
 set_property(TARGET cpputils PROPERTY CXX_STANDARD_REQUIRED ON)
 
-target_include_directories(cpputils INTERFACE include external/reflect)
+target_include_directories(cpputils INTERFACE include external/reflect external/magic_enum/include)
 
 find_package(fmt REQUIRED)
 if(TARGET fmt::fmt-header-only)
@@ -20,9 +20,6 @@ endif()
 
 find_package(range-v3 REQUIRED)
 target_link_libraries(cpputils INTERFACE range-v3)
-
-add_subdirectory(external/boostpp)
-target_link_libraries(cpputils INTERFACE boost_preprocessor)
 
 add_subdirectory(external/json)
 target_link_libraries(cpputils INTERFACE nlohmann_json::nlohmann_json)

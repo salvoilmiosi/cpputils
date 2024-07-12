@@ -9,46 +9,59 @@
 
 namespace enums {
 
+    template<enumeral auto Enum, typename T>
+    struct type_assoc {
+        static constexpr auto enum_value = Enum;
+        using enum_type = T;
+    };
+
     namespace detail {
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, Enum Value, class = void>
-        struct transform_has_type : std::false_type {};
+        template<enumeral auto Enum, typename TMap>
+        struct type_map_contains;
 
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, Enum Value>
-        struct transform_has_type<Enum, Transform, Value, std::void_t<typename Transform<Value>::type>> : std::true_type {};
+        template<enumeral auto Enum, typename TFirst, typename ... Rest>
+        struct type_map_contains<Enum, util::type_list<TFirst, Rest...>> : type_map_contains<Enum, util::type_list<Rest...>> {};
 
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, Enum Value>
-        struct transform_get {
-            using type = std::monostate;
-        };
+        template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value == Enum)
+        struct type_map_contains<Enum, util::type_list<TFirst, Rest...>> : std::true_type {};
 
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, Enum Value>
-        requires (transform_has_type<Enum, Transform, Value>::value)
-        struct transform_get<Enum, Transform, Value> {
-            using type = typename Transform<Value>::type;
-        };
+        template<enumeral auto Enum>
+        struct type_map_contains<Enum, util::type_list<>> : std::false_type {};
 
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, typename EnumSeq>
+        template<enumeral auto Enum, typename TMap>
+        struct type_map_get;
+
+        template<enumeral auto Enum, typename TFirst, typename ... Rest>
+        struct type_map_get<Enum, util::type_list<TFirst, Rest...>> : type_map_get<Enum, util::type_list<Rest...>> {};
+
+        template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value == Enum)
+        struct type_map_get<Enum, util::type_list<TFirst, Rest...>> : std::type_identity<typename TFirst::enum_type> {};
+
+        template<enumeral auto Enum>
+        struct type_map_get<Enum, util::type_list<>> : std::type_identity<std::monostate> {};
+
+        template<typename ESeq, typename TMap>
         struct make_enum_variant;
-
-        template<reflected_enum Enum, template<reflected_enum auto> typename Transform, Enum ... Es>
-        struct make_enum_variant<Enum, Transform, enum_sequence<Es ...>> {
-            using type = std::variant<typename transform_get<Enum, Transform, Es>::type ... >;
+        
+        template<typename TMap, enumeral auto ... Es>
+        struct make_enum_variant<enum_sequence<Es ...>, TMap> {
+            using type = std::variant<typename type_map_get<Es, TMap>::type ...>;
         };
     }
 
-    template<reflected_enum Enum, template<reflected_enum auto> typename Transform = enum_type>
-    struct enum_variant : detail::make_enum_variant<Enum, Transform, make_enum_sequence<Enum>>::type {
-        using base = typename detail::make_enum_variant<Enum, Transform, make_enum_sequence<Enum>>::type;
+    template<enumeral Enum, typename ... Assocs>
+    struct enum_variant : detail::make_enum_variant<make_enum_sequence<Enum>, util::type_list<Assocs...>>::type {
+        using base = typename detail::make_enum_variant<make_enum_sequence<Enum>, util::type_list<Assocs...>>::type;
         using enum_type = Enum;
 
-        template<Enum E> static constexpr bool has_type = detail::transform_has_type<Enum, Transform, E>::value;
-        template<Enum E> requires (has_type<E>) using value_type = typename Transform<E>::type;
+        template<Enum E> static constexpr bool has_type = detail::type_map_contains<E, util::type_list<Assocs...>>::value;
+        template<Enum E> requires (has_type<E>) using value_type = detail::type_map_get<E, util::type_list<Assocs...>>::type;
 
         using base::variant;
 
         template<Enum Value>
         enum_variant(enum_tag_t<Value>, auto && ... args)
-            : base(std::in_place_index<indexof(Value)>, FWD(args) ...) {}
+            : base(std::in_place_index<indexof(Value)>, std::forward<decltype(args)>(args) ...) {}
 
         base &variant_base() {
             return static_cast<base &>(*this);
@@ -60,11 +73,11 @@ namespace enums {
 
         template<Enum Value>
         auto &emplace(auto && ... args) {
-            return base::template emplace<indexof(Value)>(FWD(args) ...);
+            return base::template emplace<indexof(Value)>(std::forward<decltype(args)>(args) ...);
         }
         
         Enum enum_index() const {
-            return index_to<Enum>(base::index());
+            return enums::index_to<Enum>(base::index());
         }
 
         bool is(Enum index) const {
@@ -93,18 +106,9 @@ namespace enums {
 
     template<typename T>
     concept is_enum_variant = requires {
-        requires reflected_enum<typename T::enum_type>;
+        requires enumeral<typename T::enum_type>;
         requires is_variant<typename T::base>::value;
     };
-    
-    namespace detail {
-        template<typename T> struct variant_type_list{};
-        template<typename T> using variant_type_list_t = typename variant_type_list<T>::type;
-
-        template<typename ... Ts> struct variant_type_list<std::variant<Ts...>> {
-            using type = util::type_list<Ts...>;
-        };
-    }
 
     template<typename RetType, typename Visitor, typename Variant>
     requires is_enum_variant<std::remove_cvref_t<Variant>>
@@ -126,10 +130,10 @@ namespace enums {
         return do_visit<RetType>(visitor, v);
     }
 
-    template<typename Visitor, typename Variant, reflected_enum auto E>
+    template<typename Visitor, typename Variant, enumeral auto E>
     struct visit_return_type : std::invoke_result<Visitor, enum_tag_t<E>> {};
 
-    template<typename Visitor, typename Variant, reflected_enum auto E>
+    template<typename Visitor, typename Variant, enumeral auto E>
     requires (Variant::template has_type<E>)
     struct visit_return_type<Visitor, Variant, E> {
         using type = decltype(std::invoke(
@@ -138,7 +142,7 @@ namespace enums {
         ));
     };
 
-    template<typename Visitor, typename Variant, reflected_enum auto E>
+    template<typename Visitor, typename Variant, enumeral auto E>
     using visit_return_type_t = typename visit_return_type<Visitor, Variant, E>::type;
 
     template<typename Visitor, typename Variant>
@@ -161,28 +165,5 @@ namespace enums {
         return std::visit(visitor, v.variant_base());
     }
 }
-
-#define VARIANT_TRANSFORM_NAME(variantName) __##variantName##__transform
-
-#define GENERATE_TRANSFORM_CASE_IMPL(variantName, enumName, enumValue, enumType) \
-    template<> struct VARIANT_TRANSFORM_NAME(variantName)<enumName::enumValue> { \
-        using type = enumType; \
-    };
-
-#define GENERATE_TRANSFORM_CASE(r, variantName_enumName, elementTuple) \
-    GENERATE_TRANSFORM_CASE_IMPL( \
-        BOOST_PP_TUPLE_ELEM(0, variantName_enumName), \
-        BOOST_PP_TUPLE_ELEM(1, variantName_enumName), \
-        BOOST_PP_TUPLE_ELEM(0, elementTuple), \
-        BOOST_PP_TUPLE_ELEM(1, elementTuple) \
-    )
-
-#define DEFINE_ENUM_VARIANT_IMPL(variant_name, enum_type, element_tuple_seq) \
-    template<enum_type E> struct VARIANT_TRANSFORM_NAME(variant_name); \
-    BOOST_PP_SEQ_FOR_EACH(GENERATE_TRANSFORM_CASE, (variant_name, enum_type), element_tuple_seq) \
-    using variant_name = enums::enum_variant<enum_type, VARIANT_TRANSFORM_NAME(variant_name)>;
-
-#define DEFINE_ENUM_VARIANT(variant_name, enum_type, transformElements) \
-    DEFINE_ENUM_VARIANT_IMPL(variant_name, enum_type, ADD_PARENTHESES(transformElements))
 
 #endif

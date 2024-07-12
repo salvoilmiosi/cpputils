@@ -1,6 +1,7 @@
 #ifndef __JSON_SERIAL_H__
 #define __JSON_SERIAL_H__
 
+#include "enum_bitset.h"
 #include "enum_variant.h"
 #include "base64.h"
 
@@ -135,28 +136,25 @@ namespace json {
         }
     };
 
-    template<enums::enum_with_names T, typename Context>
+    template<enums::enumeral T, typename Context>
     struct serializer<T, Context> {
         json operator()(const T &value) const {
             return std::string(enums::to_string(value));
         }
     };
 
-#ifndef JSON_FLATTEN_ENUM_FLAGS
-    template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
-    struct serializer<T, Context> {
-        json operator()(const T &value) const {
-            using namespace enums::flag_operators;
+    template<enums::enumeral T, typename Context>
+    struct serializer<enums::bitset<T>, Context> {
+        json operator()(const enums::bitset<T> &value) const {
             auto ret = json::array();
             for (T v : enums::enum_values_v<T>) {
-                if (bool(value & v)) {
-                    ret.push_back(enums::value_to_string(v));
+                if (value.check(v)) {
+                    ret.push_back(enums::to_string(v));
                 }
             }
             return ret;
         }
     };
-#endif
 
     template<serializable T, typename Context>
     struct serializer<std::vector<T>, Context> : context_holder<Context> {
@@ -280,7 +278,7 @@ namespace json {
         }
     };
 
-    template<enums::enum_with_names T, typename Context>
+    template<enums::enumeral T, typename Context>
     struct deserializer<T, Context> {
         T operator()(const json &value) const {
             if (value.is_string()) {
@@ -296,16 +294,15 @@ namespace json {
         }
     };
 
-    template<enums::enum_with_names T, typename Context> requires enums::flags_enum<T>
-    struct deserializer<T, Context> {
-        T operator()(const json &value) const {
-            using namespace enums::flag_operators;
+    template<enums::enumeral T, typename Context>
+    struct deserializer<enums::bitset<T>, Context> {
+        enums::bitset<T> operator()(const json &value) const {
             if (value.is_array()) {
-                T ret{};
+                enums::bitset<T> ret;
                 for (const auto &elem : value) {
                     if (elem.is_string()) {
-                        if (auto v = enums::value_from_string<T>(elem.get<std::string>())) {
-                            ret |= *v;
+                        if (auto v = enums::from_string<T>(elem.get<std::string>())) {
+                            ret.add(*v);
                         } else {
                             throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.get<std::string>()));
                         }
@@ -314,13 +311,6 @@ namespace json {
                     }
                 }
                 return ret;
-            } else if (value.is_string()) {
-                auto str = value.get<std::string>();
-                if (auto ret = enums::from_string<T>(str)) {
-                    return *ret;
-                } else {
-                    throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
-                }
             } else {
                 throw std::runtime_error("Invalid type for value");
             }
