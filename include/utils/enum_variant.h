@@ -19,7 +19,7 @@ namespace enums {
         template<enumeral auto Enum, typename TMap>
         struct type_map_contains;
 
-        template<enumeral auto Enum, typename TFirst, typename ... Rest>
+        template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value != Enum)
         struct type_map_contains<Enum, util::type_list<TFirst, Rest...>> : type_map_contains<Enum, util::type_list<Rest...>> {};
 
         template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value == Enum)
@@ -31,7 +31,7 @@ namespace enums {
         template<enumeral auto Enum, typename TMap>
         struct type_map_get;
 
-        template<enumeral auto Enum, typename TFirst, typename ... Rest>
+        template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value != Enum)
         struct type_map_get<Enum, util::type_list<TFirst, Rest...>> : type_map_get<Enum, util::type_list<Rest...>> {};
 
         template<enumeral auto Enum, typename TFirst, typename ... Rest> requires (TFirst::enum_value == Enum)
