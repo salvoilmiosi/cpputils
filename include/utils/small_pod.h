@@ -148,7 +148,7 @@ private:
     uint8_t m_value{};
 
     constexpr small_int_set(uint8_t value)
-        : m_value{m_value} {}
+        : m_value{value} {}
 
 public:
     constexpr small_int_set(std::initializer_list<int> values) {
