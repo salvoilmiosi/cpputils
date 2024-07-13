@@ -123,24 +123,19 @@ namespace utils {
         }(std::index_sequence_for<Ts ...>());
         return vtable[index.index](std::forward<Visitor>(visitor));
     }
-    
-    template<typename Visitor, typename ... Ts>
-    decltype(auto) visit_tagged(Visitor &&visitor, const tagged_variant<Ts ...> &variant) {
-        using variant_type = tagged_variant<Ts ...>;
-        static constexpr auto vtable = []<size_t ... Is>(std::index_sequence<Is ...>) {
-            return std::array{
-                +[](Visitor &&fn, const variant_type &variant) -> decltype(auto) {
-                    static constexpr size_t I = Is;
-                    using tag_type = typename tagged_variant_tag_at<variant_type, I>::type;
-                    if constexpr (std::is_void_v<typename tag_type::type>) {
-                        return std::invoke(std::forward<Visitor>(fn), tag<tag_type::name>{});
-                    } else {
-                        return std::invoke(std::forward<Visitor>(fn), tag<tag_type::name>{}, std::get<I>(variant));
-                    }
-                } ...
-            };
-        }(std::index_sequence_for<Ts ...>());
-        return vtable[variant.index()](std::forward<Visitor>(visitor), variant);
+
+    template<typename Visitor, typename Variant> requires is_tagged_variant<std::remove_cvref_t<Variant>>
+    decltype(auto) visit_tagged(Visitor &&visitor, Variant &&variant) {
+        using variant_type = std::remove_cvref_t<Variant>;
+        return visit_tagged([&](tag_for<variant_type> auto tag) {
+            static constexpr auto Name = decltype(tag)::name;
+            using value_type = typename tagged_variant_value_type<Name, variant_type>::type;
+            if constexpr (std::is_void_v<value_type>) {
+                return std::invoke(std::forward<Visitor>(visitor), tag);
+            } else {
+                return std::invoke(std::forward<Visitor>(visitor), tag, get<Name>(forward<Variant>(variant)));
+            }
+        }, tagged_variant_index<variant_type>(variant.index()));
     }
 }
 
