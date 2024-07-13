@@ -88,24 +88,34 @@ namespace utils {
     }
     
     template<typename Variant>
-    struct tagged_variant_index {
-        size_t index;
+    class tagged_variant_index {
+    private:
+        size_t m_index;
 
-        constexpr bool operator == (const tagged_variant_index &other) const = default;
+    public:
+        constexpr tagged_variant_index() = default;
+
+        constexpr tagged_variant_index(const Variant &variant)
+            : m_index{variant.index()} {}
+
+        constexpr tagged_variant_index(tag_for<Variant> auto tag)
+            : m_index{tagged_variant_index_of<decltype(tag)::name, Variant>::value} {}
         
-        static constexpr tagged_variant_index find(std::string_view key) {
+        constexpr tagged_variant_index(std::string_view key) {
             const auto &tag_names = utils::tagged_variant_tag_names<Variant>::value;
             for (size_t i=0; i<tag_names.size(); ++i) {
                 if (tag_names[i] == key) {
-                    return tagged_variant_index{i};
+                    m_index = i;
+                    return;
                 }
             }
             throw std::runtime_error(fmt::format("Invalid variant type: {}", key));
         }
 
-        template<utils::tstring Name> requires tag_for<tag<Name>, Variant>
-        static constexpr tagged_variant_index of() {
-            return tagged_variant_index{tagged_variant_index_of<Name, Variant>::value};
+        constexpr bool operator == (const tagged_variant_index &other) const = default;
+
+        constexpr size_t index() const {
+            return m_index;
         }
     };
 
@@ -121,7 +131,7 @@ namespace utils {
                 } ...
             };
         }(std::index_sequence_for<Ts ...>());
-        return vtable[index.index](std::forward<Visitor>(visitor));
+        return vtable[index.index()](std::forward<Visitor>(visitor));
     }
 
     template<typename Visitor, typename Variant> requires is_tagged_variant<std::remove_cvref_t<Variant>>
@@ -135,7 +145,7 @@ namespace utils {
             } else {
                 return std::invoke(std::forward<Visitor>(visitor), tag, get<Name>(forward<Variant>(variant)));
             }
-        }, tagged_variant_index<variant_type>(variant.index()));
+        }, tagged_variant_index(variant));
     }
 }
 
@@ -146,7 +156,7 @@ namespace json {
         using variant_type = utils::tagged_variant<Ts ...>;
         using value_type = utils::tagged_variant_index<variant_type>;
         json operator()(const value_type &value) const {
-            return std::string(utils::tagged_variant_tag_names<variant_type>::value[value.index]);
+            return std::string(utils::tagged_variant_tag_names<variant_type>::value[value.index()]);
         }
     };
 
@@ -156,7 +166,7 @@ namespace json {
         using value_type = utils::tagged_variant_index<variant_type>;
 
         value_type operator()(const json &value) const {
-            return value_type::find(value.get<std::string>());
+            return value_type{value.get<std::string>()};
         }
     };
     
@@ -193,24 +203,17 @@ namespace json {
                 throw std::runtime_error("Missing type key in utils::tagged_variant");
             }
 
-            static constexpr auto vtable = []<size_t ... Is>(std::index_sequence<Is ...>) {
-                return std::array {
-                    +[](const deserializer &self, const json &inner_value) -> variant_type {
-                        static constexpr size_t I = Is;
-                        using tag_type = typename utils::tagged_variant_tag_at<variant_type, I>::type;
-                        using value_type = typename tag_type::type;
-                        if constexpr (std::is_void_v<value_type>) {
-                            return variant_type{std::in_place_index<I>};
-                        } else {
-                            return variant_type{std::in_place_index<I>, self.template deserialize_with_context<value_type>(inner_value)};
-                        }
-                    } ...
-                };
-            }(std::index_sequence_for<Ts ...>());
-
             auto key_it = value.begin();
-            auto index = utils::tagged_variant_index<variant_type>::find(key_it.key());
-            return vtable[index.index](*this, key_it.value());
+            utils::tagged_variant_index<variant_type> index{key_it.key()};
+            const json &inner_value = key_it.value();
+            return utils::visit_tagged([&](utils::tag_for<variant_type> auto tag) {
+                using value_type = typename utils::tagged_variant_value_type<decltype(tag)::name, variant_type>::type;
+                if constexpr (std::is_void_v<value_type>) {
+                    return variant_type{tag};
+                } else {
+                    return variant_type{tag, this->template deserialize_with_context<value_type>(inner_value)};
+                }
+            }, index);
         }
     };
 }
