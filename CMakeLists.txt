@@ -5,7 +5,7 @@ add_library(cpputils INTERFACE)
 set_property(TARGET cpputils PROPERTY CXX_STANDARD 20)
 set_property(TARGET cpputils PROPERTY CXX_STANDARD_REQUIRED ON)
 
-target_include_directories(cpputils INTERFACE include external/reflect external/magic_enum/include)
+target_include_directories(cpputils INTERFACE include external/reflect)
 
 find_package(fmt REQUIRED)
 if(TARGET fmt::fmt-header-only)

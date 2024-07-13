@@ -1,42 +1,74 @@
 #ifndef __ENUMS_H__
 #define __ENUMS_H__
 
-#include <magic_enum/magic_enum.hpp>
+#include <reflect>
 #include <stdexcept>
 
 #include "json_serial.h"
 
 namespace enums {
 
-    template<typename T> concept enumeral = magic_enum::is_scoped_enum_v<T>;
+    template<typename T> concept enumeral = std::is_enum_v<T>;
 
-    template<enumeral T> constexpr std::string_view enum_name_v = magic_enum::enum_type_name<T>();
+    template<enumeral T> constexpr std::string_view enum_name_v = reflect::type_name<T>();
 
-    template<enumeral T> constexpr auto enum_values_v = magic_enum::enum_values<T>();
+    template<enumeral T> constexpr auto enum_values_v = []<size_t ... Is>(std::index_sequence<Is ...>){
+        return std::array{ static_cast<T>(reflect::enumerators<T>[Is].first) ... };
+    }(std::make_index_sequence<reflect::enumerators<T>.size()>());
 
-    template<enumeral T> constexpr size_t num_members_v = magic_enum::enum_count<T>();
-
-    template<enumeral T>
-    constexpr std::string_view to_string(T value) {
-        return magic_enum::enum_name(value);
-    }
+    template<enumeral T> constexpr size_t num_members_v = enum_values_v<T>.size();
 
     template<enumeral T>
-    constexpr std::optional<T> from_string(std::string_view str) {
-        return magic_enum::enum_cast<T>(str);
+    constexpr bool is_linear_enum() {
+        size_t i=0;
+        for (T value : enum_values_v<T>) {
+            if (static_cast<size_t>(value) != i) {
+                return false;
+            }
+            ++i;
+        }
+        return true;
     }
 
     template<enumeral T>
     constexpr size_t indexof(T value) {
-        if (auto result = magic_enum::enum_index(value)) {
-            return *result;
+        if constexpr (is_linear_enum<T>()) {
+            size_t result = static_cast<size_t>(value);
+            if (result >= 0 && result <= static_cast<size_t>(enum_values_v<T>.back())) {
+                return result;
+            }
+        } else {
+            for (size_t i=0; i<enum_values_v<T>.size(); ++i) {
+                if (enum_values_v<T>[i] == value) {
+                    return i;
+                }
+            }
         }
         throw std::out_of_range("invalid enum index");
     }
 
     template<enumeral T>
     constexpr T index_to(size_t index) {
-        return magic_enum::enum_value<T>(index);
+        if constexpr (is_linear_enum<T>()) {
+            return static_cast<T>(index);
+        } else {
+            return enum_values_v<T>[index];
+        }
+    }
+
+    template<enumeral T>
+    constexpr std::string_view to_string(T input) {
+        return reflect::enumerators<T>[indexof(input)].second;
+    }
+
+    template<enumeral T>
+    constexpr std::optional<T> from_string(std::string_view str) {
+        for (const auto &[value, name] : reflect::enumerators<T>) {
+            if (name == str) {
+                return static_cast<T>(value);
+            }
+        }
+        return std::nullopt;
     }
 
     template<enumeral auto ... Values> struct enum_sequence {
