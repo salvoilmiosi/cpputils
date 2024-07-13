@@ -4,6 +4,8 @@
 #include <magic_enum/magic_enum.hpp>
 #include <stdexcept>
 
+#include "json_serial.h"
+
 namespace enums {
 
     template<typename T> concept enumeral = magic_enum::is_scoped_enum_v<T>;
@@ -50,6 +52,33 @@ namespace enums {
 
     template<enumeral T> using make_enum_sequence = typename detail::make_enum_sequence<T, std::make_index_sequence<num_members_v<T>>>::type;
     
+}
+
+namespace json {
+
+    template<enums::enumeral T, typename Context>
+    struct deserializer<T, Context> {
+        T operator()(const json &value) const {
+            if (value.is_string()) {
+                auto str = value.get<std::string>();
+                if (auto ret = enums::from_string<T>(str)) {
+                    return *ret;
+                } else {
+                    throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, str));
+                }
+            } else {
+                throw std::runtime_error("Value is not a string");
+            }
+        }
+    };
+
+    template<enums::enumeral T, typename Context>
+    struct serializer<T, Context> {
+        json operator()(const T &value) const {
+            return std::string(enums::to_string(value));
+        }
+    };
+
 }
 
 #endif

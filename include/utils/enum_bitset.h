@@ -2,6 +2,7 @@
 #define __ENUM_BITSET_H__
 
 #include "enums.h"
+#include "json_serial.h"
 
 #include <cstdint>
 #include <type_traits>
@@ -61,6 +62,47 @@ namespace enums {
             return (m_value & value.m_value) == m_value;
         }
     };
+
+}
+
+namespace json {
+
+    template<enums::enumeral T, typename Context>
+    struct serializer<enums::bitset<T>, Context> {
+        json operator()(const enums::bitset<T> &value) const {
+            auto ret = json::array();
+            for (T v : enums::enum_values_v<T>) {
+                if (value.check(v)) {
+                    ret.push_back(enums::to_string(v));
+                }
+            }
+            return ret;
+        }
+    };
+
+    template<enums::enumeral T, typename Context>
+    struct deserializer<enums::bitset<T>, Context> {
+        enums::bitset<T> operator()(const json &value) const {
+            if (value.is_array()) {
+                enums::bitset<T> ret;
+                for (const auto &elem : value) {
+                    if (elem.is_string()) {
+                        if (auto v = enums::from_string<T>(elem.get<std::string>())) {
+                            ret.add(*v);
+                        } else {
+                            throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.get<std::string>()));
+                        }
+                    } else {
+                        throw std::runtime_error("Elem is not a string");
+                    }
+                }
+                return ret;
+            } else {
+                throw std::runtime_error("Invalid type for value");
+            }
+        }
+    };
+
 }
 
 #endif
