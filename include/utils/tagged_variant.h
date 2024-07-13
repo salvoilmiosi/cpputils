@@ -117,6 +117,10 @@ namespace utils {
         constexpr size_t index() const {
             return m_index;
         }
+
+        constexpr std::string_view to_string() const {
+            return utils::tagged_variant_tag_names<Variant>::value[index()];
+        }
     };
 
     template<typename Visitor, typename ... Ts>
@@ -153,20 +157,16 @@ namespace json {
 
     template<typename Context, typename ... Ts>
     struct serializer<utils::tagged_variant_index<utils::tagged_variant<Ts ...>>, Context> {
-        using variant_type = utils::tagged_variant<Ts ...>;
-        using value_type = utils::tagged_variant_index<variant_type>;
-        json operator()(const value_type &value) const {
-            return std::string(utils::tagged_variant_tag_names<variant_type>::value[value.index()]);
+        json operator()(const utils::tagged_variant_index<utils::tagged_variant<Ts ...>> &value) const {
+            return std::string(value.to_string());
         }
     };
 
     template<typename Context, typename ... Ts>
     struct deserializer<utils::tagged_variant_index<utils::tagged_variant<Ts ...>>, Context> {
-        using variant_type = utils::tagged_variant<Ts ...>;
-        using value_type = utils::tagged_variant_index<variant_type>;
-
+        using value_type = utils::tagged_variant_index<utils::tagged_variant<Ts ...>>;
         value_type operator()(const json &value) const {
-            return value_type{value.get<std::string>()};
+            return value_type{std::string_view(value.get<std::string>())};
         }
     };
     
@@ -204,7 +204,7 @@ namespace json {
             }
 
             auto key_it = value.begin();
-            utils::tagged_variant_index<variant_type> index{key_it.key()};
+            utils::tagged_variant_index<variant_type> index{std::string_view(key_it.key())};
             const json &inner_value = key_it.value();
             return utils::visit_tagged([&](utils::tag_for<variant_type> auto tag) {
                 using value_type = typename utils::tagged_variant_value_type<decltype(tag)::name, variant_type>::type;
