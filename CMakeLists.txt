@@ -23,3 +23,5 @@ target_link_libraries(cpputils INTERFACE range-v3)
 
 add_subdirectory(external/json)
 target_link_libraries(cpputils INTERFACE nlohmann_json::nlohmann_json)
+
+target_compile_definitions(cpputils INTERFACE NTEST)
