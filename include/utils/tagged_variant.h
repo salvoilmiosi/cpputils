@@ -1,6 +1,8 @@
 #ifndef __TAGGED_VARIANT_H__
 #define __TAGGED_VARIANT_H__
 
+#include <variant>
+
 #include "tstring.h"
 #include "json_serial.h"
 
