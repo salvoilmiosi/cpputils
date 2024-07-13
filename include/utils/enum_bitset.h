@@ -71,7 +71,7 @@ namespace json {
     struct serializer<enums::bitset<T>, Context> {
         json operator()(const enums::bitset<T> &value) const {
             auto ret = json::array();
-            for (T v : enums::enum_values_v<T>) {
+            for (T v : enums::enum_values<T>()) {
                 if (value.check(v)) {
                     ret.push_back(enums::to_string(v));
                 }
@@ -87,10 +87,11 @@ namespace json {
                 enums::bitset<T> ret;
                 for (const auto &elem : value) {
                     if (elem.is_string()) {
-                        if (auto v = enums::from_string<T>(elem.get<std::string>())) {
+                        const std::string &str = elem.get<std::string>();
+                        if (auto v = enums::from_string<T>(str)) {
                             ret.add(*v);
                         } else {
-                            throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_name_v<T>, elem.get<std::string>()));
+                            throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_type_name<T>(), str));
                         }
                     } else {
                         throw std::runtime_error("Elem is not a string");
