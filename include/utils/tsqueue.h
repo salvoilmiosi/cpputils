@@ -7,7 +7,7 @@
 
 #include "type_list.h"
 
-namespace util {
+namespace utils {
     template<typename T, size_t MaxSize = std::numeric_limits<size_t>::max()>
     class tsqueue {
     public:

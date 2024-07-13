@@ -5,7 +5,7 @@
 #include <variant>
 #include <ranges>
 
-namespace util {
+namespace utils {
     struct suspend_maybe {
         bool ready;
         explicit suspend_maybe(bool ready) : ready(ready) { }

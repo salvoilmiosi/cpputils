@@ -3,9 +3,7 @@
 
 #include <type_traits>
 
-#define FWD(x) std::forward<decltype(x)>(x)
-
-namespace util {
+namespace utils {
 
     template<typename ... Ts> struct type_list {
         static constexpr size_t size = sizeof...(Ts);
@@ -56,20 +54,20 @@ namespace util {
         template<template<typename> typename Filter, typename TList, typename TFrom> struct type_list_filter{};
 
         template<template<typename> typename Filter, typename TList>
-        struct type_list_filter<Filter, TList, util::type_list<>> {
+        struct type_list_filter<Filter, TList, utils::type_list<>> {
             using type = TList;
         };
 
         template<template<typename> typename Filter, typename TList, typename First, typename ... Ts>
-        struct type_list_filter<Filter, TList, util::type_list<First, Ts...>> {
+        struct type_list_filter<Filter, TList, utils::type_list<First, Ts...>> {
             using type = typename type_list_filter<
                 Filter,
-                util::type_list_append_if_t<
+                utils::type_list_append_if_t<
                     Filter<First>::value,
                     First,
                     TList
                 >,
-                util::type_list<Ts...>
+                utils::type_list<Ts...>
             >::type;
         };
     }

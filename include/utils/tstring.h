@@ -13,6 +13,10 @@ namespace utils {
         consteval tstring(const char (&str)[N]) {
             std::copy_n(str, N, m_data);
         }
+
+        consteval operator std::string_view() const {
+            return std::string_view{m_data, m_data + N - 1};
+        }
     };
 
 }

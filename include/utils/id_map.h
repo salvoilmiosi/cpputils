@@ -5,7 +5,7 @@
 #include <vector>
 #include <functional>
 
-namespace util {
+namespace utils {
 
     template<typename T, typename IdGetter> class id_map;
 

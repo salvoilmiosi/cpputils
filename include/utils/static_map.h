@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <array>
 
-namespace util {
+namespace utils {
 
     namespace impl {
         template<typename Key, typename Value, size_t Size>

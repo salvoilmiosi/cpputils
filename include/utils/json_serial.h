@@ -4,6 +4,7 @@
 #include "enum_bitset.h"
 #include "enum_variant.h"
 #include "base64.h"
+#include "utils.h"
 
 #include <nlohmann/json.hpp>
 
@@ -183,7 +184,7 @@ namespace json {
         
         json operator()(const T &value) const {
             using enum_type = typename T::enum_type;
-            return enums::visit_indexed([this]<enum_type E>(enums::enum_tag_t<E>, auto && ... args) -> json {
+            return enums::visit_indexed([this]<enum_type E>(enums::tag_t<E>, auto && ... args) -> json {
                 std::string key{enums::to_string(E)};
                 if constexpr (sizeof...(args) > 0) {
                     return json::object({
@@ -355,7 +356,7 @@ namespace json {
             auto it = value.begin();
             if (auto variant_type = enums::from_string<enum_type>(it.key())) {
                 const json &inner_value = it.value();
-                return enums::visit_enum([&]<enum_type E>(enums::enum_tag_t<E> tag) {
+                return enums::visit_enum([&]<enum_type E>(enums::tag_t<E> tag) {
                     if constexpr (T::template has_type<E>) {
 #ifdef JSON_REMOVE_EMPTY_OBJECTS
                         if (inner_value.empty()) return T(tag);

@@ -17,6 +17,8 @@ namespace rv = ranges::views;
 
 #endif
 
+#define FWD(x) std::forward<decltype(x)>(x)
+
 template<typename T> class not_null;
 template<typename T> class not_null<T *> {
 public:
