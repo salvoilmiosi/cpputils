@@ -190,19 +190,22 @@ namespace json {
         using context_holder<Context>::context_holder;
 
         using variant_type = utils::tagged_variant<Ts ...>;
+
+        template<typename T>
+        json serialize_args(T &&arg) const {
+            return this->serialize_with_context(std::forward<T>(arg));
+        }
+
+        json serialize_args() const {
+            return json::object();
+        }
         
         json operator()(const variant_type &value) const {
-            return utils::visit_tagged([this](utils::tag_for<variant_type> auto tag, auto && ... args) -> json {
-                std::string key{std::string_view(tag.name)};
-                if constexpr (sizeof...(args) > 0) {
-                    return json::object({
-                        {key, this->serialize_with_context(FWD(args) ... )}
-                    });
-                } else {
-                    return json::object({
-                        {key, json::object()}
-                    });
-                }
+            return utils::visit_tagged([this](utils::tag_for<variant_type> auto tag, auto && ... args) {
+                return json{{
+                    std::string_view{tag.name},
+                    serialize_args(std::forward<decltype(args)>(args) ... )
+                }};
             }, value);
         }
     };

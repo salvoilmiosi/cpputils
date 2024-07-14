@@ -19,9 +19,10 @@ namespace utils {
         tsqueue &operator = (tsqueue &&) = delete;
 
     public:
-        T &emplace_back(auto && ... args) {
+        template<typename ... Ts>
+        T &emplace_back(Ts && ... args) {
             std::scoped_lock lock(m_mutex);
-            T &ret = m_queue.emplace_back(FWD(args) ... );
+            T &ret = m_queue.emplace_back(std::forward<Ts ...>(args) ... );
             if (m_queue.size() > MaxSize) {
                 m_queue.pop_front();
             }

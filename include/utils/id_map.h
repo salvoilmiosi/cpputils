@@ -158,8 +158,9 @@ namespace utils {
             return m_data[id - 1] = std::move(ptr);
         }
 
-        T &emplace(auto && ... args) {
-            return *insert(std::make_unique<T>(FWD(args) ... ));
+        template<typename ... Ts>
+        T &emplace(Ts && ... args) {
+            return *insert(std::make_unique<T>(std::forward<Ts>(args) ... ));
         }
 
         std::pair<T &, bool> try_insert(std::unique_ptr<T> &&ptr) {
@@ -180,8 +181,9 @@ namespace utils {
             }
         }
 
-        std::pair<T &, bool> try_emplace(auto && ... args) {
-            return try_insert(std::make_unique<T>(FWD(args) ... ));
+        template<typename ... Ts>
+        std::pair<T &, bool> try_emplace(Ts && ... args) {
+            return try_insert(std::make_unique<T>(std::forward<Ts ...>(args) ... ));
         }
 
         iterator find(size_t id) {

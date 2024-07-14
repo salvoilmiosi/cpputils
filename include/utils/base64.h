@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <span>
 
+#include "json_serial.h"
+
 // https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c
 
 namespace base64 {
@@ -106,18 +108,22 @@ inline std::vector<std::byte> base64_decode(std::string_view encoded_string) {
   return ret;
 }
 
-struct encoded_bytes {
-  std::vector<std::byte> bytes;
+}
 
-  encoded_bytes() = default;
-  encoded_bytes(std::string_view str)
-    : bytes(base64_decode(str)) {}
-  
-  std::string to_string() const {
-    return base64_encode(bytes);
-  }
-};
+namespace json {
+  template<typename Context>
+  struct serializer<std::vector<std::byte>, Context> {
+    json operator()(const std::vector<std::byte> &value) const {
+      return base64::base64_encode(value);
+    }
+  };
 
+  template<typename Context>
+  struct deserializer<std::vector<std::byte>, Context> {
+    std::vector<std::byte> operator()(const json &value) const {
+      return base64::base64_decode(value.get<std::string>());
+    }
+  };
 }
 
 #endif

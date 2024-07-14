@@ -2,15 +2,17 @@
 #define __UTILS_H__
 
 #include <vector>
-#include <ranges>
-#include <range/v3/all.hpp>
 
 #ifdef USE_STD_RANGES
+
+#include <ranges>
 
 namespace rn = std::ranges;
 namespace rv = std::views;
 
 #else
+
+#include <range/v3/all.hpp>
 
 namespace rn = ranges;
 namespace rv = ranges::views;
@@ -56,12 +58,6 @@ template<typename T> using unwrap_not_null_t = typename unwrap_not_null<T>::type
 
 template<typename ... Ts> struct overloaded : Ts ... { using Ts::operator() ...; };
 template<typename ... Ts> overloaded(Ts ...) -> overloaded<Ts ...>;
-
-template<typename T> struct same_if_trivial { using type = const T &; };
-template<typename T> using same_if_trivial_t = typename same_if_trivial<T>::type;
-
-template<typename T> requires (std::is_trivially_copyable_v<T>)
-struct same_if_trivial<T> { using type = T; };
 
 template<typename T>
 class nullable_ref {

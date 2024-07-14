@@ -1,9 +1,6 @@
 #ifndef __JSON_SERIAL_H__
 #define __JSON_SERIAL_H__
 
-#include "base64.h"
-#include "utils.h"
-
 #include <nlohmann/json.hpp>
 #include <fmt/format.h>
 #include <reflect>
@@ -114,12 +111,12 @@ namespace json {
         using context_holder<Context>::context_holder;
 
         json operator()(const T &value) const {
-            auto ret = json::object();
-            reflect::for_each<T>([&](auto I) {
-                ret.push_back(json::object_t::value_type(reflect::member_name<I, T>(),
-                    this->template serialize_with_context(reflect::get<I>(value))));
-            });
-            return ret;
+            return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
+                return json{{
+                    reflect::member_name<Is, T>(),
+                    this->template serialize_with_context(reflect::get<Is>(value))
+                } ... };
+            }(std::make_index_sequence<reflect::size<T>()>());
         }
     };
 
@@ -134,13 +131,6 @@ namespace json {
                 ret.push_back(this->serialize_with_context(obj));
             }
             return ret;
-        }
-    };
-
-    template<typename Context>
-    struct serializer<base64::encoded_bytes, Context> {
-        json operator()(const base64::encoded_bytes &value) const {
-            return value.to_string();
         }
     };
 
@@ -185,23 +175,33 @@ namespace json {
         }
     };
 
-    template<typename T, typename Context> requires (std::is_aggregate_v<T> && std::is_default_constructible_v<T>)
+    template<typename T, typename Context> requires std::is_aggregate_v<T>
     struct deserializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
 
+        template<size_t I>
+        using member_type = std::remove_cvref_t<decltype(reflect::get<I>(std::declval<T>()))>;
+
+        template<size_t I>
+        member_type<I> deserialize_field(const json &value) const {
+            static constexpr auto name = reflect::member_name<I, T>();
+            using value_type = member_type<I>;
+            if (value.contains(name)) {
+                return this->template deserialize_with_context<value_type>(value[name]);
+            } else if constexpr (std::is_default_constructible_v<value_type>) {
+                return value_type{};
+            } else {
+                throw std::runtime_error(fmt::format("missing field {}", name));
+            }
+        }
+
         T operator()(const json &value) const {
-            T ret{};
-            reflect::for_each<T>([&](auto I) {
-                auto name = reflect::member_name<I, T>();
-                if (value.contains(name)) {
-                    auto &field = reflect::get<I>(ret);
-                    using value_type = std::remove_cvref_t<decltype(field)>;
-                    field = this->template deserialize_with_context<value_type>(value[name]);
-                }
-            });
-            return ret;
+            return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
+                return T{ deserialize_field<Is>(value) ... };
+            }(std::make_index_sequence<reflect::size<T>()>());
         }
     };
+    
 
     template<deserializable T, typename Context>
     struct deserializer<std::vector<T>, Context> : context_holder<Context> {
@@ -214,17 +214,6 @@ namespace json {
                 ret.push_back(this->template deserialize_with_context<T>(obj));
             }
             return ret;
-        }
-    };
-
-    template<typename Context>
-    struct deserializer<base64::encoded_bytes, Context> {
-        base64::encoded_bytes operator()(const json &value) const {
-            if (value.is_string()) {
-                return base64::encoded_bytes(value.get<std::string>());
-            } else {
-                throw std::runtime_error("Value is not a string");
-            }
         }
     };
 
