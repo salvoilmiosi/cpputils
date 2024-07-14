@@ -216,7 +216,7 @@ namespace json {
         }
 
         T operator()(const json &value) const {
-            T ret;
+            T ret{};
             deserialize_fields(*this, value, ret, std::make_index_sequence<reflect::size<T>()>());
             return ret;
         }
