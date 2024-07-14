@@ -21,9 +21,9 @@ namespace utils {
         struct build_tagged_variant {
             using type = std::variant<type_or_monostate<typename Ts::type> ...>;
         };
-    }
 
-    template<tstring Name, typename V> struct tagged_variant_index_of;
+        template<typename Variant, tstring Name> struct find_tag_name;
+    }
 
     template<typename ... Ts>
     struct tagged_variant : detail::build_tagged_variant<Ts ...>::type {
@@ -32,18 +32,29 @@ namespace utils {
 
         template<tstring Name, typename ... Args>
         tagged_variant(tag<Name>, Args && ... args)
-            : base(std::in_place_index<tagged_variant_index_of<Name, tagged_variant>::value>, std::forward<Args>(args) ...) {}
+            : base(std::in_place_index<detail::find_tag_name<tagged_variant, Name>::index>, std::forward<Args>(args) ...) {}
     };
 
-    template<tstring Name, typename T, typename ... Ts>
-    struct tagged_variant_index_of<Name, tagged_variant<tag<Name, T>, Ts...>> {
-        static constexpr size_t value = 0;
-    };
+    namespace detail {
+        template<tstring Name, typename T, typename ... Ts>
+        struct find_tag_name<tagged_variant<tag<Name, T>, Ts...>, Name> {
+            static constexpr auto name = Name;
+            static constexpr size_t index = 0;
+            using value_type = T;
+        };
 
-    template<tstring Name, typename First, typename ... Rest>
-    struct tagged_variant_index_of<Name, tagged_variant<First, Rest ...>> {
-        static constexpr size_t value = 1 + tagged_variant_index_of<Name, tagged_variant<Rest ...>>::value;
-    };
+        template<tstring Name, typename First, typename ... Rest>
+        struct find_tag_name<tagged_variant<First, Rest ...>, Name> {
+            using next = find_tag_name<tagged_variant<Rest ...>, Name>;
+
+            static constexpr auto name = next::name;
+            static constexpr size_t index = 1 + next::index;
+            using value_type = typename next::value_type;
+        };
+
+        template<typename T> struct is_tagged_variant : std::false_type {};
+        template<typename ... Ts> struct is_tagged_variant<tagged_variant<Ts ...>> : std::true_type {};
+    }
 
     template<typename T> struct tagged_variant_tag_names;
 
@@ -52,39 +63,21 @@ namespace utils {
         static constexpr std::array value { std::string_view(Ts::name) ... };
     };
 
-    namespace detail {
-        template<typename T> struct is_tagged_variant : std::false_type {};
-        template<typename ... Ts> struct is_tagged_variant<tagged_variant<Ts ...>> : std::true_type {};
-    }
-
     template<typename T>
     concept is_tagged_variant = detail::is_tagged_variant<T>::value;
 
-    template<typename T, typename V>
+    template<typename Tag, typename Variant>
     concept tag_for = requires {
-        requires is_tagged_variant<V>;
-        tagged_variant_index_of<T::name, V>::value;
+        requires is_tagged_variant<Variant>;
+        detail::find_tag_name<Variant, Tag::name>::index;
     };
 
-    template<typename V, size_t I> struct tagged_variant_tag_at;
-
-    template<typename First, typename ... Rest>
-    struct tagged_variant_tag_at<tagged_variant<First, Rest...>, 0> : std::type_identity<First> {};
-
-    template<typename First, typename ... Rest, size_t I>
-    struct tagged_variant_tag_at<tagged_variant<First, Rest...>, I> : tagged_variant_tag_at<tagged_variant<Rest...>, I - 1> {};
-
-    template<tstring Name, typename Variant> requires tag_for<tag<Name>, Variant>
-    using tagged_variant_value_type = typename tagged_variant_tag_at<Variant, tagged_variant_index_of<Name, Variant>::value>::type;
-
-    template<tstring Name, typename Variant> requires tag_for<tag<Name>, std::remove_cvref_t<Variant>>
-    bool holds_alternative(Variant &&variant) {
-        return variant.index() == tagged_variant_index_of<Name, std::remove_cvref_t<Variant>>::value;
-    }
+    template<typename Variant, tstring Name> requires tag_for<tag<Name>, Variant>
+    using tagged_variant_value_type = typename detail::find_tag_name<Variant, Name>::value_type;
 
     template<tstring Name, typename Variant> requires tag_for<tag<Name>, std::remove_cvref_t<Variant>>
     decltype(auto) get(Variant &&variant) {
-        return std::get<tagged_variant_index_of<Name, std::remove_cvref_t<Variant>>::value>(variant);
+        return std::get<detail::find_tag_name<std::remove_cvref_t<Variant>, Name>::index>(variant);
     }
     
     template<typename Variant>
@@ -99,7 +92,7 @@ namespace utils {
             : m_index{variant.index()} {}
 
         constexpr tagged_variant_index(tag_for<Variant> auto tag)
-            : m_index{tagged_variant_index_of<decltype(tag)::name, Variant>::value} {}
+            : m_index{detail::find_tag_name<Variant, tag.name>::index} {}
         
         constexpr tagged_variant_index(std::string_view key) {
             const auto &tag_names = utils::tagged_variant_tag_names<Variant>::value;
@@ -122,34 +115,44 @@ namespace utils {
             return utils::tagged_variant_tag_names<Variant>::value[index()];
         }
     };
+    
+    template<typename Visitor, typename Variant> struct visit_return_type;
+
+    template<typename Visitor, typename First, typename ... Ts>
+    struct visit_return_type<Visitor, tagged_variant<First, Ts ...>> : std::invoke_result<Visitor, tag<First::name>> {};
+
+    template<typename RetType, typename Visitor, typename ... Ts>
+    RetType visit_tagged(Visitor &&visitor, tagged_variant_index<tagged_variant<Ts ...>> index) {
+        static constexpr std::array<RetType (*)(Visitor&&), sizeof...(Ts)> vtable {
+            [](Visitor &&visitor) -> RetType {
+                return std::invoke(std::forward<Visitor>(visitor), tag<Ts::name>{});
+            } ...
+        };
+        return vtable[index.index()](std::forward<Visitor>(visitor));
+    }
 
     template<typename Visitor, typename ... Ts>
     decltype(auto) visit_tagged(Visitor &&visitor, tagged_variant_index<tagged_variant<Ts ...>> index) {
-        using variant_type = tagged_variant<Ts ...>;
-        static constexpr auto vtable = []<size_t ... Is>(std::index_sequence<Is ...>) {
-            return std::array{
-                +[](Visitor &&fn) -> decltype(auto) {
-                    static constexpr size_t I = Is;
-                    using tag_type = typename tagged_variant_tag_at<variant_type, I>::type;
-                    return std::invoke(std::forward<Visitor>(fn), tag<tag_type::name>{});
-                } ...
-            };
-        }(std::index_sequence_for<Ts ...>());
-        return vtable[index.index()](std::forward<Visitor>(visitor));
+        using return_type = typename visit_return_type<Visitor, tagged_variant<Ts ...>>::type;
+        return visit_tagged<return_type>(std::forward<Visitor>(visitor), index);
+    }
+
+    template<typename RetType, typename Visitor, typename Variant> requires is_tagged_variant<std::remove_cvref_t<Variant>>
+    RetType visit_tagged(Visitor &&visitor, Variant &&variant) {
+        using variant_type = std::remove_cvref_t<Variant>;
+        return visit_tagged<RetType>([&](tag_for<variant_type> auto tag) -> RetType {
+            if constexpr (std::is_void_v<tagged_variant_value_type<variant_type, tag.name>>) {
+                return std::invoke(std::forward<Visitor>(visitor), tag);
+            } else {
+                return std::invoke(std::forward<Visitor>(visitor), tag, get<tag.name>(forward<Variant>(variant)));
+            }
+        }, tagged_variant_index(variant));
     }
 
     template<typename Visitor, typename Variant> requires is_tagged_variant<std::remove_cvref_t<Variant>>
     decltype(auto) visit_tagged(Visitor &&visitor, Variant &&variant) {
-        using variant_type = std::remove_cvref_t<Variant>;
-        return visit_tagged([&](tag_for<variant_type> auto tag) {
-            static constexpr auto Name = decltype(tag)::name;
-            using value_type = typename tagged_variant_value_type<Name, variant_type>::type;
-            if constexpr (std::is_void_v<value_type>) {
-                return std::invoke(std::forward<Visitor>(visitor), tag);
-            } else {
-                return std::invoke(std::forward<Visitor>(visitor), tag, get<Name>(forward<Variant>(variant)));
-            }
-        }, tagged_variant_index(variant));
+        using return_type = typename visit_return_type<Visitor, std::remove_cvref_t<Variant>>::type;
+        return visit_tagged<return_type>(std::forward<Visitor>(visitor), std::forward<Variant>(variant));
     }
 }
 
@@ -177,8 +180,8 @@ namespace json {
         using variant_type = utils::tagged_variant<Ts ...>;
         
         json operator()(const variant_type &value) const {
-            return utils::visit_tagged([this]<utils::tag_for<variant_type> Tag>(Tag, auto && ... args) -> json {
-                std::string key{std::string_view(Tag::name)};
+            return utils::visit_tagged([this](utils::tag_for<variant_type> auto tag, auto && ... args) -> json {
+                std::string key{std::string_view(tag.name)};
                 if constexpr (sizeof...(args) > 0) {
                     return json::object({
                         {key, this->serialize_with_context(FWD(args) ... )}
@@ -207,7 +210,7 @@ namespace json {
             utils::tagged_variant_index<variant_type> index{std::string_view(key_it.key())};
             const json &inner_value = key_it.value();
             return utils::visit_tagged([&](utils::tag_for<variant_type> auto tag) {
-                using value_type = typename utils::tagged_variant_value_type<decltype(tag)::name, variant_type>::type;
+                using value_type = utils::tagged_variant_value_type<variant_type, tag.name>;
                 if constexpr (std::is_void_v<value_type>) {
                     return variant_type{tag};
                 } else {
