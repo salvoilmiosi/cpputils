@@ -112,25 +112,13 @@ namespace json {
     template<typename T, typename Context> requires std::is_aggregate_v<T>
     struct serializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
-        
-        template<size_t I>
-        static void serialize_field(const serializer &self, const T &value, json &ret) {
-            const auto &field = reflect::get<I>(value);
-            json json_value = self.serialize_with_context(field);
-#ifdef JSON_REMOVE_EMPTY_OBJECTS
-            if (json_value.empty()) return;
-#endif
-            ret.push_back(json::object_t::value_type(reflect::member_name<I>(value), std::move(json_value)));
-        }
-
-        template<size_t ... Is>
-        static void serialize_fields(const serializer &self, const T &value, json &ret, std::index_sequence<Is...>) {
-            (serialize_field<Is>(self, value, ret), ...);
-        }
 
         json operator()(const T &value) const {
             auto ret = json::object();
-            serialize_fields(*this, value, ret, std::make_index_sequence<reflect::size<T>()>());
+            reflect::for_each<T>([&](auto I) {
+                ret.push_back(json::object_t::value_type(reflect::member_name<I, T>(),
+                    this->template serialize_with_context(reflect::get<I>(value))));
+            });
             return ret;
         }
     };
@@ -200,24 +188,17 @@ namespace json {
     template<typename T, typename Context> requires (std::is_aggregate_v<T> && std::is_default_constructible_v<T>)
     struct deserializer<T, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
-        
-        template<size_t I>
-        static void deserialize_field(const deserializer &self, const json &value, T &out) {
-            auto name = reflect::member_name<I, T>();
-            auto &field = reflect::get<I>(out);
-            if (value.contains(name)) {
-                field = self.template deserialize_with_context<std::remove_cvref_t<decltype(field)>>(value[name]);
-            }
-        }
-
-        template<size_t ... Is>
-        static void deserialize_fields(const deserializer &self, const json &value, T &out, std::index_sequence<Is ...>) {
-            (deserialize_field<Is>(self, value, out), ...);
-        }
 
         T operator()(const json &value) const {
             T ret{};
-            deserialize_fields(*this, value, ret, std::make_index_sequence<reflect::size<T>()>());
+            reflect::for_each<T>([&](auto I) {
+                auto name = reflect::member_name<I, T>();
+                if (value.contains(name)) {
+                    auto &field = reflect::get<I>(ret);
+                    using value_type = std::remove_cvref_t<decltype(field)>;
+                    field = this->template deserialize_with_context<value_type>(value[name]);
+                }
+            });
             return ret;
         }
     };
