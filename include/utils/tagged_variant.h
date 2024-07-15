@@ -51,20 +51,28 @@ namespace utils {
     };
 
     namespace detail {
-        template<tstring Name, typename T, typename ... Ts>
-        struct find_tag_name<tagged_variant<tag<Name, T>, Ts...>, Name> {
-            static constexpr auto name = Name;
-            static constexpr size_t index = 0;
-            using value_type = T;
+        template<typename ... Ts>
+        constexpr size_t find_tag_name_impl(std::string_view name) {
+            constexpr size_t size = sizeof...(Ts);
+            constexpr std::string_view names[size] = { Ts::name ... };
+            for (size_t i=0; i<size; ++i) {
+                if (names[i] == name) {
+                    return i;
+                }
+            }
+            throw "Cannot find name";
+        }
+
+        template<tstring Name, typename ... Ts>
+        struct find_tag_name<tagged_variant<Ts ...>, Name> {
+            static constexpr size_t index = find_tag_name_impl<Ts ...>(Name);
         };
 
-        template<tstring Name, typename First, typename ... Rest>
-        struct find_tag_name<tagged_variant<First, Rest ...>, Name> {
-            using next = find_tag_name<tagged_variant<Rest ...>, Name>;
+        template<typename Variant, size_t I> struct tagged_variant_type_at;
 
-            static constexpr auto name = next::name;
-            static constexpr size_t index = 1 + next::index;
-            using value_type = typename next::value_type;
+        template<size_t I, typename ... Ts>
+        struct tagged_variant_type_at<tagged_variant<Ts ...>, I> {
+            using type = std::tuple_element_t<I, std::tuple<typename Ts::type ...>>;
         };
 
         template<typename T> struct is_tagged_variant : std::false_type {};
@@ -88,7 +96,9 @@ namespace utils {
     };
 
     template<typename Variant, tstring Name> requires tag_for<tag<Name>, Variant>
-    using tagged_variant_value_type = typename detail::find_tag_name<Variant, Name>::value_type;
+    using tagged_variant_value_type = typename detail::tagged_variant_type_at<Variant,
+        detail::find_tag_name<Variant, Name>::index
+    >::type;
 
     template<tstring Name, typename Variant> requires tag_for<tag<Name>, std::remove_cvref_t<Variant>>
     decltype(auto) get(Variant &&variant) {
