@@ -130,8 +130,11 @@ namespace utils {
     
     template<typename Visitor, typename Variant> struct visit_return_type;
 
-    template<typename Visitor, typename First, typename ... Ts>
-    struct visit_return_type<Visitor, tagged_variant<First, Ts ...>> : std::invoke_result<Visitor, tag<First::name>> {};
+    template<typename Visitor, tstring First, typename T, typename ... Ts>
+    struct visit_return_type<Visitor, tagged_variant<tag<First, T>, Ts ...>> : std::invoke_result<Visitor, tag<First>, T> {};
+
+    template<typename Visitor, tstring First, typename ... Ts>
+    struct visit_return_type<Visitor, tagged_variant<tag<First>, Ts ...>> : std::invoke_result<Visitor, tag<First>> {};
 
     template<typename RetType, typename Visitor, typename ... Ts>
     RetType visit_tagged(Visitor &&visitor, tagged_variant_index<tagged_variant<Ts ...>> index) {
@@ -145,7 +148,7 @@ namespace utils {
 
     template<typename Visitor, typename ... Ts>
     decltype(auto) visit_tagged(Visitor &&visitor, tagged_variant_index<tagged_variant<Ts ...>> index) {
-        using return_type = typename visit_return_type<Visitor, tagged_variant<Ts ...>>::type;
+        using return_type = typename visit_return_type<Visitor, tagged_variant<tag<Ts::name> ...>>::type;
         return visit_tagged<return_type>(std::forward<Visitor>(visitor), index);
     }
 
