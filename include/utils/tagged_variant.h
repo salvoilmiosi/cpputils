@@ -181,6 +181,9 @@ namespace json {
     struct deserializer<utils::tagged_variant_index<utils::tagged_variant<Ts ...>>, Context> {
         using value_type = utils::tagged_variant_index<utils::tagged_variant<Ts ...>>;
         value_type operator()(const json &value) const {
+            if (!value.is_string()) {
+                throw std::runtime_error("Cannot deserialize tagged variant index: value is not a string");
+            }
             return value_type{std::string_view(value.get<std::string>())};
         }
     };
@@ -217,8 +220,11 @@ namespace json {
         using variant_type = utils::tagged_variant<Ts ...>;
         
         variant_type operator()(const json &value) const {
+            if (!value.is_object()) {
+                throw std::runtime_error("Cannot deserialize tagged variant: value is not an object");
+            }
             if (value.size() != 1) {
-                throw std::runtime_error("Missing type key in utils::tagged_variant");
+                throw std::runtime_error("Cannot deserialize tagged variant: object must contain only one key");
             }
 
             auto key_it = value.begin();

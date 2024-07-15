@@ -28,6 +28,12 @@ namespace json {
         typename deserializer<T, Context>;
     };
 
+    using json_error = json::exception;
+
+    struct deserialize_error : json_error {
+        deserialize_error(const char *message): json_error(0, message) {}
+    };
+
     template<typename Context>
     struct context_holder {
         const Context &context;
@@ -77,12 +83,20 @@ namespace json {
 
     template<typename T> requires deserializable<T>
     T deserialize(const json &value) {
-        return deserializer<T, void>{}(value);
+        try {
+            return deserializer<T, void>{}(value);
+        } catch (const std::exception &e) {
+            throw deserialize_error(e.what());
+        }
     }
 
     template<typename T, typename Context> requires deserializable<T, Context>
     T deserialize(const json &value, const Context &context) {
-        return context_holder<Context>{context}.template deserialize_with_context<T>(value);
+        try {
+            return context_holder<Context>{context}.template deserialize_with_context<T>(value);
+        } catch (const std::exception &e) {
+            throw deserialize_error(e.what());
+        }
     }
 
     template<typename Context>
@@ -164,6 +178,19 @@ namespace json {
     template<typename T, typename Context> requires std::is_arithmetic_v<T>
     struct deserializer<T, Context> {
         T operator()(const json &value) const {
+            if constexpr (std::is_same_v<T, bool>) {
+                if (!value.is_boolean()) {
+                    throw std::runtime_error("Cannot deserialize boolean");
+                }
+            } else if constexpr (std::is_integral_v<T>) {
+                if (!value.is_number_integer()) {
+                    throw std::runtime_error("Cannot deserialize integer");
+                }
+            } else {
+                if (!value.is_number()) {
+                    throw std::runtime_error("Cannot deserialize number");
+                }
+            }
             return value.get<T>();
         }
     };
@@ -171,6 +198,9 @@ namespace json {
     template<typename Context>
     struct deserializer<std::string, Context> {
         std::string operator()(const json &value) const {
+            if (!value.is_string()) {
+                throw std::runtime_error("Cannot deserialize string");
+            }
             return value.get<std::string>();
         }
     };
@@ -196,6 +226,9 @@ namespace json {
         }
 
         T operator()(const json &value) const {
+            if (!value.is_object()) {
+                throw std::runtime_error(fmt::format("Cannot deserialize {}: value is not an object", reflect::type_name<T>()));
+            }
             return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
                 return T{ deserialize_field<Is>(value) ... };
             }(std::make_index_sequence<reflect::size<T>()>());
@@ -208,6 +241,9 @@ namespace json {
         using context_holder<Context>::context_holder;
         
         std::vector<T> operator()(const json &value) const {
+            if (!value.is_array()) {
+                throw std::runtime_error(fmt::format("Cannot deserialize vector of {}", reflect::type_name<T>()));
+            }
             std::vector<T> ret;
             ret.reserve(value.size());
             for (const auto &obj : value) {
@@ -220,6 +256,9 @@ namespace json {
     template<typename Rep, typename Period, typename Context>
     struct deserializer<std::chrono::duration<Rep, Period>, Context> {
         std::chrono::duration<Rep, Period> operator()(const json &value) const {
+            if (!value.is_number()) {
+                throw std::runtime_error("Cannot deserialize duration: value is not a number");
+            }
             return std::chrono::duration<Rep, Period>{value.get<Rep>()};
         }
     };

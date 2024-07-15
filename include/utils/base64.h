@@ -121,6 +121,9 @@ namespace json {
   template<typename Context>
   struct deserializer<std::vector<std::byte>, Context> {
     std::vector<std::byte> operator()(const json &value) const {
+      if (!value.is_string()) {
+        throw std::runtime_error("Cannot deserialize base64 encoded string");
+      }
       return base64::base64_decode(value.get<std::string>());
     }
   };

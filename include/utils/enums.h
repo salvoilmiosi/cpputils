@@ -10,10 +10,6 @@ namespace enums {
 
     template<typename T> concept enumeral = std::is_enum_v<T>;
 
-    template<enumeral T> constexpr std::string_view enum_type_name() {
-        return reflect::type_name<T>();
-    }
-
     template<enumeral T, typename ISeq> struct build_enum_values;
     template<enumeral T, size_t ... Is> struct build_enum_values<T, std::index_sequence<Is ...>> {
         static constexpr std::array value { static_cast<T>(reflect::enumerators<T>[Is].first) ... };
@@ -79,15 +75,14 @@ namespace json {
     template<enums::enumeral T, typename Context>
     struct deserializer<T, Context> {
         T operator()(const json &value) const {
-            if (value.is_string()) {
-                auto str = value.get<std::string>();
-                if (auto ret = enums::from_string<T>(str)) {
-                    return *ret;
-                } else {
-                    throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_type_name<T>(), str));
-                }
+            if (!value.is_string()) {
+                throw std::runtime_error(fmt::format("Cannot deserialize {}: value is not a string", reflect::type_name<T>()));
+            }
+            auto str = value.get<std::string>();
+            if (auto ret = enums::from_string<T>(str)) {
+                return *ret;
             } else {
-                throw std::runtime_error("Value is not a string");
+                throw std::runtime_error(fmt::format("Invalid {} value: {}", reflect::type_name<T>(), str));
             }
         }
     };

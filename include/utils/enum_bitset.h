@@ -83,24 +83,14 @@ namespace json {
     template<enums::enumeral T, typename Context>
     struct deserializer<enums::bitset<T>, Context> {
         enums::bitset<T> operator()(const json &value) const {
-            if (value.is_array()) {
-                enums::bitset<T> ret;
-                for (const auto &elem : value) {
-                    if (elem.is_string()) {
-                        const std::string &str = elem.get<std::string>();
-                        if (auto v = enums::from_string<T>(str)) {
-                            ret.add(*v);
-                        } else {
-                            throw std::runtime_error(fmt::format("Invalid {}: {}", enums::enum_type_name<T>(), str));
-                        }
-                    } else {
-                        throw std::runtime_error("Elem is not a string");
-                    }
-                }
-                return ret;
-            } else {
-                throw std::runtime_error("Invalid type for value");
+            if (!value.is_array()) {
+                throw std::runtime_error(fmt::format("Cannot deserialize {} bitset: value is not an array", reflect::type_name<T>()));
             }
+            enums::bitset<T> ret;
+            for (const auto &elem : value) {
+                ret.add(deserializer<T, Context>{}(elem));
+            }
+            return ret;
         }
     };
 
