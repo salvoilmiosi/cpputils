@@ -1,23 +1,23 @@
 #ifndef __UTILS_TSTRING_H__
 #define __UTILS_TSTRING_H__
 
-#include <algorithm>
-#include <string>
+#include <string_view>
 
 namespace utils {
 
-    template<size_t N>
+    template<typename T, std::size_t Size>
     struct tstring {
-        char m_data[N];
-        
-        consteval tstring(const char (&str)[N]) {
-            std::copy_n(str, N, m_data);
+        constexpr explicit(false) tstring(const T* str) {
+            for (decltype(Size) i{}; i < Size; ++i) { data[i] = str[i]; }
+            data[Size] = T();
         }
-
-        consteval operator std::string_view() const {
-            return std::string_view{m_data, m_data + N - 1};
-        }
+        [[nodiscard]] constexpr auto operator<=>(const tstring&) const = default;
+        [[nodiscard]] constexpr explicit(false) operator std::basic_string_view<T>() const { return {std::data(data), Size}; }
+        [[nodiscard]] constexpr auto size() const { return Size; }
+        T data[Size+1];
     };
+
+    template<class T, std::size_t Capacity, std::size_t Size = Capacity-1> tstring(const T (&str)[Capacity]) -> tstring<T, Size>;
 
 }
 
