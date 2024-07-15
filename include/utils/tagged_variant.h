@@ -15,22 +15,25 @@ namespace utils {
     };
 
     namespace detail {
-        template<tstring ... Trest> struct unique_names;
-
-        template<tstring T1, tstring T2, tstring ... Trest>
-        struct unique_names<T1, T2, Trest ...> : std::conjunction<
-            unique_names<T1, T2>, unique_names<T1, Trest ...>, unique_names<T2, Trest ...>
-        > {};
-
-        template<tstring Name> struct unique_names<Name> : std::true_type {};
-        template<tstring T1, tstring T2> struct unique_names<T1, T2> : std::true_type {};
-        template<tstring Name> struct unique_names<Name, Name> : std::false_type {};
+        template<typename ... Ts>
+        constexpr bool check_unique_names() {
+            constexpr size_t size = sizeof...(Ts);
+            constexpr std::string_view names[size] = { Ts::name ... };
+            for (size_t i=0; i<size-1; ++i) {
+                for (size_t j=i+1; j<size; ++j) {
+                    if (names[i] == names[j]) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
 
         template<typename T> using type_or_monostate = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
 
         template<typename ... Ts>
         struct build_tagged_variant {
-            static_assert(unique_names<Ts::name ...>::value, "Tag names must be unique");
+            static_assert(check_unique_names<Ts ...>(), "Tag names must be unique");
             using type = std::variant<type_or_monostate<typename Ts::type> ...>;
         };
 
