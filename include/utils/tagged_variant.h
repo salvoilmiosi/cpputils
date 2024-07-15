@@ -100,7 +100,7 @@ namespace utils {
     public:
         constexpr tagged_variant_index() = default;
 
-        constexpr tagged_variant_index(const Variant &variant)
+        explicit constexpr tagged_variant_index(const Variant &variant)
             : m_index{variant.index()} {}
 
         constexpr tagged_variant_index(tag_for<Variant> auto tag)
