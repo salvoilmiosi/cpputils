@@ -12,7 +12,7 @@
 
 namespace json {
 
-    using json = nlohmann::json;
+    using json = nlohmann::ordered_json;
 
     template<typename T, typename Context = void> struct serializer;
 
