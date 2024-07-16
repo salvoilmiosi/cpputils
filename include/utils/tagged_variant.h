@@ -14,6 +14,12 @@ namespace utils {
         using type = T;
     };
 
+    template<typename T>
+    concept is_tag = requires {
+        { T::name } -> std::convertible_to<std::string_view>;
+        typename T::type;
+    };
+
     namespace detail {
         template<typename ... Ts>
         constexpr bool check_unique_names() {
@@ -45,9 +51,9 @@ namespace utils {
         using base = detail::build_tagged_variant<Ts ...>::type;
         using base::variant;
 
-        template<tstring Name, typename ... Args>
-        tagged_variant(tag<Name>, Args && ... args)
-            : base(std::in_place_index<detail::find_tag_name<tagged_variant, tag<Name>>::index>, std::forward<Args>(args) ...) {}
+        template<is_tag Tag, typename ... Args>
+        tagged_variant(Tag, Args && ... args)
+            : base(std::in_place_index<detail::find_tag_name<tagged_variant, Tag>::index>, std::forward<Args>(args) ...) {}
     };
 
     namespace detail {
@@ -91,6 +97,7 @@ namespace utils {
 
     template<typename Tag, typename Variant>
     concept tag_for = requires {
+        requires is_tag<Tag>;
         requires is_tagged_variant<Variant>;
         detail::find_tag_name<Variant, Tag>::index;
     };
