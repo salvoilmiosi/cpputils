@@ -61,9 +61,21 @@ namespace json {
             if (!value.is_object()) {
                 throw std::runtime_error(fmt::format("Cannot deserialize {}: value is not an object", reflect::type_name<T>()));
             }
-            return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
-                return T{ deserialize_field<Is>(value) ... };
-            }(std::make_index_sequence<reflect::size<T>()>());
+            if constexpr (requires { typename T::keep_default_values; }) {
+                T result{};
+                reflect::for_each<T>([&](auto I) {
+                    static constexpr auto name = reflect::member_name<I, T>();
+                    using value_type = member_type<T, I>;
+                    if (value.contains(name)) {
+                        reflect::get<I>(result) = this->template deserialize_with_context<value_type>(value[name]);
+                    }
+                });
+                return result;
+            } else {
+                return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
+                    return T{ deserialize_field<Is>(value) ... };
+                }(std::make_index_sequence<reflect::size<T>()>());
+            }
         }
     };
 
