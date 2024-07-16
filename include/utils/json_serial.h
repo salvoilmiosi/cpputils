@@ -126,10 +126,12 @@ namespace json {
 
         json operator()(const T &value) const {
             return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
-                return json{{
-                    reflect::member_name<Is, T>(),
-                    this->template serialize_with_context(reflect::get<Is>(value))
-                } ... };
+                return json::object({
+                    {
+                        reflect::member_name<Is, T>(),
+                        this->template serialize_with_context(reflect::get<Is>(value))
+                    } ... 
+                });
             }(std::make_index_sequence<reflect::size<T>()>());
         }
     };

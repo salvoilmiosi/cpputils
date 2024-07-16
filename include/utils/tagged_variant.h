@@ -172,7 +172,7 @@ namespace utils {
             if constexpr (std::is_void_v<tagged_variant_value_type<variant_type, tag.name>>) {
                 return std::invoke(std::forward<Visitor>(visitor), tag);
             } else {
-                return std::invoke(std::forward<Visitor>(visitor), tag, get<tag.name>(forward<Variant>(variant)));
+                return std::invoke(std::forward<Visitor>(visitor), tag, get<tag.name>(std::forward<Variant>(variant)));
             }
         }, tagged_variant_index(variant));
     }
