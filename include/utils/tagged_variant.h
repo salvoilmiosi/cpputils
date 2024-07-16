@@ -37,7 +37,7 @@ namespace utils {
             using type = std::variant<type_or_monostate<typename Ts::type> ...>;
         };
 
-        template<typename Variant, tstring Name> struct find_tag_name;
+        template<typename Variant, typename Tag> struct find_tag_name;
     }
 
     template<typename ... Ts>
@@ -47,7 +47,7 @@ namespace utils {
 
         template<tstring Name, typename ... Args>
         tagged_variant(tag<Name>, Args && ... args)
-            : base(std::in_place_index<detail::find_tag_name<tagged_variant, Name>::index>, std::forward<Args>(args) ...) {}
+            : base(std::in_place_index<detail::find_tag_name<tagged_variant, tag<Name>>::index>, std::forward<Args>(args) ...) {}
     };
 
     namespace detail {
@@ -63,9 +63,9 @@ namespace utils {
             throw "Cannot find name";
         }
 
-        template<tstring Name, typename ... Ts>
-        struct find_tag_name<tagged_variant<Ts ...>, Name> {
-            static constexpr size_t index = find_tag_name_impl<Ts ...>(Name);
+        template<typename Tag, typename ... Ts>
+        struct find_tag_name<tagged_variant<Ts ...>, Tag> {
+            static constexpr size_t index = find_tag_name_impl<Ts ...>(Tag::name);
         };
 
         template<typename Variant, size_t I> struct tagged_variant_type_at;
@@ -92,17 +92,17 @@ namespace utils {
     template<typename Tag, typename Variant>
     concept tag_for = requires {
         requires is_tagged_variant<Variant>;
-        detail::find_tag_name<Variant, Tag::name>::index;
+        detail::find_tag_name<Variant, Tag>::index;
     };
 
-    template<typename Variant, tstring Name> requires tag_for<tag<Name>, Variant>
+    template<typename Variant, typename Tag> requires tag_for<Tag, Variant>
     using tagged_variant_value_type = typename detail::tagged_variant_type_at<Variant,
-        detail::find_tag_name<Variant, Name>::index
+        detail::find_tag_name<Variant, Tag>::index
     >::type;
 
     template<tstring Name, typename Variant> requires tag_for<tag<Name>, std::remove_cvref_t<Variant>>
     decltype(auto) get(Variant &&variant) {
-        return std::get<detail::find_tag_name<std::remove_cvref_t<Variant>, Name>::index>(variant);
+        return std::get<detail::find_tag_name<std::remove_cvref_t<Variant>, tag<Name>>::index>(variant);
     }
     
     template<typename Variant>
@@ -117,7 +117,7 @@ namespace utils {
             : m_index{variant.index()} {}
 
         explicit constexpr tagged_variant_index(tag_for<Variant> auto tag)
-            : m_index{detail::find_tag_name<Variant, tag.name>::index} {}
+            : m_index{detail::find_tag_name<Variant, decltype(tag)>::index} {}
         
         explicit constexpr tagged_variant_index(std::string_view key) {
             const auto &tag_names = utils::tagged_variant_tag_names<Variant>::value;
@@ -169,7 +169,7 @@ namespace utils {
     RetType visit_tagged(Visitor &&visitor, Variant &&variant) {
         using variant_type = std::remove_cvref_t<Variant>;
         return visit_tagged<RetType>([&](tag_for<variant_type> auto tag) -> RetType {
-            if constexpr (std::is_void_v<tagged_variant_value_type<variant_type, tag.name>>) {
+            if constexpr (std::is_void_v<tagged_variant_value_type<variant_type, decltype(tag)>>) {
                 return std::invoke(std::forward<Visitor>(visitor), tag);
             } else {
                 return std::invoke(std::forward<Visitor>(visitor), tag, get<tag.name>(std::forward<Variant>(variant)));
@@ -247,7 +247,7 @@ namespace json {
             utils::tagged_variant_index<variant_type> index{std::string_view(key_it.key())};
             const json &inner_value = key_it.value();
             return utils::visit_tagged([&](utils::tag_for<variant_type> auto tag) {
-                using value_type = utils::tagged_variant_value_type<variant_type, tag.name>;
+                using value_type = utils::tagged_variant_value_type<variant_type, decltype(tag)>;
                 if constexpr (std::is_void_v<value_type>) {
                     return variant_type{tag};
                 } else {
