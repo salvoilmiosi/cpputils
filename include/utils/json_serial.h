@@ -3,7 +3,6 @@
 
 #include <nlohmann/json.hpp>
 #include <fmt/format.h>
-#include <reflect>
 
 #include <vector>
 #include <string>
@@ -14,19 +13,24 @@ namespace json {
 
     using json = nlohmann::ordered_json;
 
+    template<typename T>
+    concept is_complete = requires(T self) { sizeof(self); };
+
     template<typename T, typename Context = void> struct serializer;
 
     template<typename T, typename Context = void>
-    concept serializable = requires {
-        typename serializer<T, Context>;
-    };
+    struct is_serializable : std::bool_constant<is_complete<serializer<T, Context>>> {};
+
+    template<typename T, typename Context = void>
+    concept serializable = is_serializable<T, Context>::value;
 
     template<typename T, typename Context = void> struct deserializer;
 
     template<typename T, typename Context = void>
-    concept deserializable = requires {
-        typename deserializer<T, Context>;
-    };
+    struct is_deserializable : std::bool_constant<is_complete<deserializer<T, Context>>> {};
+
+    template<typename T, typename Context = void>
+    concept deserializable = is_deserializable<T, Context>::value;
 
     using json_error = json::exception;
 
@@ -120,23 +124,7 @@ namespace json {
         }
     };
 
-    template<typename T, typename Context> requires std::is_aggregate_v<T>
-    struct serializer<T, Context> : context_holder<Context> {
-        using context_holder<Context>::context_holder;
-
-        json operator()(const T &value) const {
-            return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
-                return json::object({
-                    {
-                        reflect::member_name<Is, T>(),
-                        this->template serialize_with_context(reflect::get<Is>(value))
-                    } ... 
-                });
-            }(std::make_index_sequence<reflect::size<T>()>());
-        }
-    };
-
-    template<serializable T, typename Context>
+    template<typename T, typename Context> requires serializable<T, Context>
     struct serializer<std::vector<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
@@ -157,7 +145,7 @@ namespace json {
         }
     };
 
-    template<typename T, typename Context>
+    template<typename T, typename Context> requires serializable<T, Context>
     struct serializer<std::optional<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
 
@@ -206,45 +194,14 @@ namespace json {
             return value.get<std::string>();
         }
     };
-
-    template<typename T, typename Context> requires std::is_aggregate_v<T>
-    struct deserializer<T, Context> : context_holder<Context> {
-        using context_holder<Context>::context_holder;
-
-        template<size_t I>
-        using member_type = std::remove_cvref_t<decltype(reflect::get<I>(std::declval<T>()))>;
-
-        template<size_t I>
-        member_type<I> deserialize_field(const json &value) const {
-            static constexpr auto name = reflect::member_name<I, T>();
-            using value_type = member_type<I>;
-            if (value.contains(name)) {
-                return this->template deserialize_with_context<value_type>(value[name]);
-            } else if constexpr (std::is_default_constructible_v<value_type>) {
-                return value_type{};
-            } else {
-                throw std::runtime_error(fmt::format("missing field {}", name));
-            }
-        }
-
-        T operator()(const json &value) const {
-            if (!value.is_object()) {
-                throw std::runtime_error(fmt::format("Cannot deserialize {}: value is not an object", reflect::type_name<T>()));
-            }
-            return [&]<size_t ... Is>(std::index_sequence<Is ...>) {
-                return T{ deserialize_field<Is>(value) ... };
-            }(std::make_index_sequence<reflect::size<T>()>());
-        }
-    };
     
-
-    template<deserializable T, typename Context>
+    template<typename T, typename Context> requires deserializable<T, Context>
     struct deserializer<std::vector<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         
         std::vector<T> operator()(const json &value) const {
             if (!value.is_array()) {
-                throw std::runtime_error(fmt::format("Cannot deserialize vector of {}", reflect::type_name<T>()));
+                throw std::runtime_error("Cannot deserialize vector");
             }
             std::vector<T> ret;
             ret.reserve(value.size());
@@ -265,7 +222,7 @@ namespace json {
         }
     };
 
-    template<typename T, typename Context>
+    template<typename T, typename Context> requires deserializable<T, Context>
     struct deserializer<std::optional<T>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
 

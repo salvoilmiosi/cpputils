@@ -186,7 +186,7 @@ public:
 };
 
 namespace json {
-    template<typename T, size_t MaxSize, typename Context>
+    template<typename T, size_t MaxSize, typename Context> requires serializable<T, Context>
     struct serializer<small_vector<T, MaxSize>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
         

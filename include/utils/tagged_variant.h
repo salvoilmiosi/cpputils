@@ -210,8 +210,11 @@ namespace json {
             return value_type{std::string_view(value.get<std::string>())};
         }
     };
+
+    template<typename T, typename Context>
+    concept void_or_serializable = std::is_void_v<T> || serializable<T, Context>;
     
-    template<typename Context, typename ... Ts>
+    template<typename Context, typename ... Ts> requires (void_or_serializable<typename Ts::type, Context> && ...)
     struct serializer<utils::tagged_variant<Ts ...>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
 
@@ -236,7 +239,10 @@ namespace json {
         }
     };
 
-    template<typename Context, typename ... Ts>
+    template<typename T, typename Context>
+    concept void_or_deserializable = std::is_void_v<T> || deserializable<T, Context>;
+
+    template<typename Context, typename ... Ts> requires (void_or_deserializable<typename Ts::type, Context> && ...)
     struct deserializer<utils::tagged_variant<Ts ...>, Context> : context_holder<Context> {
         using context_holder<Context>::context_holder;
 
