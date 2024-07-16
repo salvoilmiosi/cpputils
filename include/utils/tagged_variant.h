@@ -116,10 +116,10 @@ namespace utils {
         explicit constexpr tagged_variant_index(const Variant &variant)
             : m_index{variant.index()} {}
 
-        constexpr tagged_variant_index(tag_for<Variant> auto tag)
+        explicit constexpr tagged_variant_index(tag_for<Variant> auto tag)
             : m_index{detail::find_tag_name<Variant, tag.name>::index} {}
         
-        constexpr tagged_variant_index(std::string_view key) {
+        explicit constexpr tagged_variant_index(std::string_view key) {
             const auto &tag_names = utils::tagged_variant_tag_names<Variant>::value;
             for (size_t i=0; i<tag_names.size(); ++i) {
                 if (tag_names[i] == key) {
